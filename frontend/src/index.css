@@ -18,6 +18,7 @@
       transparent 26%
     ),
     linear-gradient(180deg, #060816 0%, #0b1025 50%, #05060f 100%);
+  background-attachment: fixed;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

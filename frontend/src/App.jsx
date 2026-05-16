@@ -37,6 +37,7 @@ function App() {
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState(new Set());
+  const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] = useState(true);
 
   const techStack = repoData?.tech_stack || [];
   const importantFiles =
@@ -270,8 +271,8 @@ function App() {
           </div>
         </aside>
 
-        <section className="flex min-h-165 flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint max-xl:min-h-130 self-start">
-          <div className="mb-4 flex items-start justify-between gap-3">
+        <section className="flex h-[700px] flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
+          <div className="mb-4 flex items-start justify-between gap-3 shrink-0">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
                 AI chat
@@ -285,13 +286,13 @@ function App() {
             </span>
           </div>
 
-          <div className="flex-1 content-start overflow-auto pr-1 space-y-5">
+          <div className="flex-1 overflow-y-auto pr-1 space-y-5 min-h-0">
             {messages.map((message, index) => (
               <article
                 key={`${message.role}-${index}`}
                 className={`rounded-2xl border border-white/10 p-4 ${message.role === "user" ? "ml-[12%] bg-cyan-300/10 max-md:ml-0" : "mr-[12%] bg-violet-500/10 max-md:mr-0"}`}
               >
-                <p className="m-0 mb-2 leading-7 text-slate-200/80 break-words whitespace-pre-wrap">
+                <p className="m-0 mb-2 text-sm leading-6 text-slate-200/80 break-words whitespace-pre-wrap">
                   {message.content}
                 </p>
                 {message.files?.length ? (
@@ -400,31 +401,37 @@ function App() {
           </div>
 
           <div className="mt-4 grid gap-3">
-            <h3 className="m-0 text-lg font-semibold text-slate-50">
+            <h3
+              className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
+              onClick={() => setIsImportantFilesCollapsed(!isImportantFilesCollapsed)}
+            >
+              {isImportantFilesCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
               Important files
             </h3>
-            <div className="grid gap-3">
-              {importantFiles.length ? (
-                importantFiles.map((file) => (
-                  <article
-                    key={file.path}
-                    className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 overflow-hidden"
-                  >
-                    <strong className="block text-slate-50 break-words overflow-wrap-anywhere">
-                      {getRepoRelativePath(file.path)}
-                    </strong>
-                    <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 break-words">
-                      {file.summary || "Analyzing file purpose..."}
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <p className="text-slate-200/75">
-                  The backend will surface entry points, config, routes, and
-                  auth-related files here.
-                </p>
-              )}
-            </div>
+            {!isImportantFilesCollapsed && (
+              <div className="grid gap-3">
+                {importantFiles.length ? (
+                  importantFiles.map((file) => (
+                    <article
+                      key={file.path}
+                      className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 overflow-hidden"
+                    >
+                      <strong className="block text-slate-50 break-words overflow-wrap-anywhere">
+                        {getRepoRelativePath(file.path)}
+                      </strong>
+                      <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 break-words">
+                        {file.summary || "Analyzing file purpose..."}
+                      </p>
+                    </article>
+                  ))
+                ) : (
+                  <p className="text-slate-200/75">
+                    The backend will surface entry points, config, routes, and
+                    auth-related files here.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </aside>
       </section>
