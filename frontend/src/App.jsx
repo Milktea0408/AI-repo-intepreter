@@ -241,8 +241,8 @@ function App() {
         </div>
       </section>
 
-      <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint">
+      <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.1fr)_minmax(280px,0.9fr)] xl:items-start">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -270,7 +270,7 @@ function App() {
           </div>
         </aside>
 
-        <section className="flex min-h-165 flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint max-xl:min-h-130">
+        <section className="flex min-h-165 flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint max-xl:min-h-130 self-start">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -337,7 +337,7 @@ function App() {
           </form>
         </section>
 
-        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
