@@ -245,21 +245,19 @@ function App() {
             </p>
           ) : null}
 
-          {!repoData && (
-            <div className="mt-2 rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
-              <h3 className="m-0 mb-3 text-sm font-semibold uppercase tracking-wider text-violet-300">
-                Using the Application
-              </h3>
-              <ol className="m-0 space-y-2 pl-5 text-sm leading-6 text-slate-200/75 list-decimal">
-                <li className="pl-2">Download or create a .zip file of your repository</li>
-                <li className="pl-2">Click "Choose a .zip file" above to select it</li>
-                <li className="pl-2">Click "Analyze Repository" to upload and process</li>
-                <li className="pl-2">Explore the repository structure in the tree view</li>
-                <li className="pl-2">Ask questions about the codebase in the AI chat</li>
-                <li className="pl-2">Review generated insights and important files</li>
-              </ol>
-            </div>
-          )}
+          <div className="mt-2 rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
+            <h3 className="m-0 mb-3 text-sm font-semibold uppercase tracking-wider text-violet-300">
+              Using the Application
+            </h3>
+            <ol className="m-0 space-y-2 pl-5 text-sm leading-6 text-slate-200/75 list-decimal">
+              <li className="pl-2">Download or create a .zip file of your repository</li>
+              <li className="pl-2">Click "Choose a .zip file" above to select it</li>
+              <li className="pl-2">Click "Analyze Repository" to upload and process</li>
+              <li className="pl-2">Explore the repository structure in the tree view</li>
+              <li className="pl-2">Ask questions about the codebase in the AI chat</li>
+              <li className="pl-2">Review generated insights and important files</li>
+            </ol>
+          </div>
         </div>
       </section>
 
