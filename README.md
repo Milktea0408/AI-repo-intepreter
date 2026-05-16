@@ -1,56 +1,153 @@
-# AI Repo intepreter
+# IBM Bob Repository Interpreter
 
-A repo interpreter for built for the IBM BOB Hackathon which helps users understand codebases quickly by analyzing repository structure and content.
+An AI-powered repository analyzer built for the IBM Bob Hackathon that helps developers understand codebases quickly by analyzing repository structure, detecting tech stacks, and providing intelligent Q&A capabilities.
+
+## Features
+
+- 📦 **Repository Upload**: Upload any codebase as a .zip file
+- 🔍 **Tech Stack Detection**: Automatically identifies technologies used (React, Python, FastAPI, etc.)
+- 🌳 **Interactive File Tree**: Collapsible directory structure for easy navigation
+- 💬 **AI Chat**: Ask questions about the codebase and get intelligent answers
+- 📊 **Smart Insights**: Auto-generated onboarding summary and important files analysis
+- 🎯 **File Summaries**: AI-generated descriptions of what each important file does
+
+## Tech Stack
+
+### Frontend
+- React 19
+- Vite 8
+- Tailwind CSS 4
+- Lucide React (icons)
+
+### Backend
+- Python 3.10+
+- FastAPI
+- IBM Watsonx AI (Granite 8B Code Instruct model)
+- Uvicorn
 
 ## Setup
 
-### Frontend
-
-The frontend uses React + Vite + Tailwind CSS.
-
-#### Prerequisites
+### Prerequisites
 - Node.js (LTS recommended)
-- npm (comes with Node)
+- Python 3.10 or newer
+- IBM Watsonx AI credentials
 
-#### Install dependencies
+### Backend Setup
 
-From the project root:
-
-```bash
-cd frontend
-npm install
-```
-
-#### Commands for running the frontend
-
-```bash
-cd frontend
-npm run dev     # starts the Vite dev server at http://localhost:5173
-npm run build   # Build for production
-```
-
-### Backend
-
-The backend uses FastAPI + Uvicorn.
-
-#### Prerequisites
-- Python 3.10+ (or newer)
-- macOS/Linux terminal (commands below)
-
-#### Setup commands
-
-From the project root:
-
+1. Navigate to the backend directory:
 ```bash
 cd backend
-make install    # creates .venv and installs dependencies from requirements.txt
-make run-dev    # starts FastAPI with auto-reload at http://127.0.0.1:8000
+```
+
+2. Create a `.env` file with your IBM Watsonx credentials:
+```env
+WATSONX_API_KEY=your_api_key_here
+WATSONX_PROJECT_ID=your_project_id_here
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+```
+
+3. Install dependencies and run:
+```bash
+make install    # Creates virtual environment and installs dependencies
+make run-dev    # Starts FastAPI with auto-reload at http://127.0.0.1:8000
 ```
 
 Other useful commands:
 ```bash
-cd backend
-make run      # run without auto-reload
-make freeze   # update requirements.txt with installed versions
-make clean    # remove virtual environment
+make run      # Run without auto-reload
+make freeze   # Update requirements.txt with installed versions
+make clean    # Remove virtual environment
 ```
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Start the development server:
+```bash
+npm run dev     # Starts Vite dev server at http://localhost:5173
+```
+
+Other commands:
+```bash
+npm run build   # Build for production
+npm run preview # Preview production build
+```
+
+## Usage
+
+1. Start both the backend and frontend servers
+2. Open http://localhost:5173 in your browser
+3. Upload a repository .zip file
+4. Explore the generated dashboard:
+   - **Repository Tree**: Browse the file structure
+   - **AI Chat**: Ask questions about the codebase
+   - **Generated Insights**: View tech stack, onboarding summary, and important files
+
+## Project Structure
+
+```
+IBM_Hackathon/
+├── backend/
+│   ├── main.py           # FastAPI application and endpoints
+│   ├── helpers.py        # Utility functions for analysis
+│   ├── requirements.txt  # Python dependencies
+│   └── Makefile         # Build and run commands
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx              # Main application component
+│   │   ├── sections/            # UI section components
+│   │   │   ├── HeroSection.jsx
+│   │   │   ├── UploadSection.jsx
+│   │   │   ├── RepositoryTree.jsx
+│   │   │   ├── ChatSection.jsx
+│   │   │   └── InsightsPanel.jsx
+│   │   └── utils/
+│   │       └── helpers.js       # Frontend utility functions
+│   ├── package.json
+│   └── vite.config.js
+└── README.md
+```
+
+## Key Features Explained
+
+### Repository Analysis
+- Extracts and analyzes uploaded .zip files
+- Builds a hierarchical file tree
+- Detects programming languages and frameworks
+- Identifies important files (configs, entry points, etc.)
+
+### AI-Powered Insights
+- Generates onboarding summaries using IBM Watsonx AI
+- Creates file-specific descriptions
+- Provides intelligent answers to codebase questions
+- Uses context-aware document matching for accurate responses
+
+### Interactive UI
+- Collapsible folder tree (collapsed by default)
+- Expandable insight sections
+- Real-time chat with loading indicators
+- Responsive design for all screen sizes
+
+## API Endpoints
+
+- `POST /upload` - Upload and analyze a repository
+- `POST /summary` - Generate onboarding summary
+- `POST /ask` - Ask questions about the repository
+- `GET /repo-tree` - Get repository structure
+
+## License
+
+See [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+Built for the IBM Bob Hackathon using IBM Watsonx AI.
