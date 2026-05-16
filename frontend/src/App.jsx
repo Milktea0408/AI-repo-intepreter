@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import HeroSection from "./sections/HeroSection";
 import UploadSection from "./sections/UploadSection";
+import DashboardHeader from "./sections/DashboardHeader";
 import RepositoryTree from "./sections/RepositoryTree";
 import ChatSection from "./sections/ChatSection";
 import InsightsPanel from "./sections/InsightsPanel";
@@ -195,14 +196,7 @@ function App() {
         />
       </section>
 
-      <div className="mt-12 mb-8">
-        <p className="mb-3 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
-          Dashboard
-        </p>
-        <h2 className="m-0 text-[clamp(1.5rem,3vw,2.5rem)] font-semibold leading-tight text-slate-50">
-          Explore Your Repository
-        </h2>
-      </div>
+      <DashboardHeader />
 
       <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.1fr)_minmax(280px,0.9fr)] xl:items-start">
         <RepositoryTree
