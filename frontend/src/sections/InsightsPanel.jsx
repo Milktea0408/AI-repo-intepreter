@@ -1,6 +1,14 @@
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { getRepoRelativePath } from "../utils/helpers";
 
+function normalizeSummaryPaths(text) {
+  if (!text) return text;
+
+  return text.replace(/\/(?:[^/\s]+\/)+[^/\s]+/g, (match) =>
+    getRepoRelativePath(match),
+  );
+}
+
 export default function InsightsPanel({
   techStack,
   summary,
@@ -24,9 +32,7 @@ export default function InsightsPanel({
       </div>
 
       <div className="grid gap-3">
-        <h3 className="m-0 text-lg font-semibold text-slate-50">
-          Tech stack
-        </h3>
+        <h3 className="m-0 text-lg font-semibold text-slate-50">Tech stack</h3>
         <div className="flex flex-wrap gap-2">
           {techStack.length ? (
             techStack.map((item) => (
@@ -46,9 +52,15 @@ export default function InsightsPanel({
       <div className="mt-4 grid gap-3">
         <h3
           className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
-          onClick={() => setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)}
+          onClick={() =>
+            setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)
+          }
         >
-          {isOnboardingSummaryCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+          {isOnboardingSummaryCollapsed ? (
+            <ChevronRight size={20} />
+          ) : (
+            <ChevronDown size={20} />
+          )}
           Onboarding summary
         </h3>
         {!isOnboardingSummaryCollapsed && (
@@ -56,10 +68,10 @@ export default function InsightsPanel({
             {summary ? (
               <div className="grid gap-3">
                 <p className="m-0 leading-7 text-slate-200/80">
-                  {summary.project_overview}
+                  {normalizeSummaryPaths(summary.project_overview)}
                 </p>
                 <p className="m-0 leading-7 text-slate-200/80">
-                  {summary.architecture_explanation}
+                  {normalizeSummaryPaths(summary.architecture_explanation)}
                 </p>
                 <h4 className="m-0 pt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300/70">
                   Notes
@@ -67,7 +79,7 @@ export default function InsightsPanel({
                 <ul className="m-0 grid list-none gap-2 p-0">
                   {summary.learning_roadmap.map((step) => (
                     <li key={step} className="leading-6 text-slate-200/80">
-                      {step}
+                      {normalizeSummaryPaths(step)}
                     </li>
                   ))}
                 </ul>
@@ -96,17 +108,17 @@ export default function InsightsPanel({
           Important files
         </h3>
         {!isImportantFilesCollapsed && (
-          <div className="max-h-[420px] overflow-y-auto pr-1 space-y-3">
+          <div className="max-h-105 overflow-y-auto pr-1 space-y-3">
             {importantFiles.length ? (
               importantFiles.map((file) => (
                 <article
                   key={file.path}
                   className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 overflow-hidden"
                 >
-                  <strong className="block text-slate-50 break-words overflow-wrap-anywhere">
+                  <strong className="block text-slate-50 wrap-break-word overflow-wrap-anywhere">
                     {getRepoRelativePath(file.path)}
                   </strong>
-                  <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 break-words">
+                  <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 wrap-break-word">
                     {file.summary || "Analyzing file purpose..."}
                   </p>
                 </article>
