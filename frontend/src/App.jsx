@@ -145,6 +145,12 @@ function App() {
       { role: "user", content: trimmedQuestion },
     ]);
 
+    // Reset textarea height
+    const textarea = event.target.querySelector('textarea');
+    if (textarea) {
+      textarea.style.height = 'auto';
+    }
+
     try {
       const questionResponse = await fetch(`${apiBaseUrl}/ask`, {
         method: "POST",
@@ -285,7 +291,7 @@ function App() {
                 key={`${message.role}-${index}`}
                 className={`rounded-2xl border border-white/10 p-4 ${message.role === "user" ? "ml-[12%] bg-cyan-300/10 max-md:ml-0" : "mr-[12%] bg-violet-500/10 max-md:mr-0"}`}
               >
-                <p className="m-0 mb-2 leading-7 text-slate-200/80">
+                <p className="m-0 mb-2 leading-7 text-slate-200/80 break-words whitespace-pre-wrap">
                   {message.content}
                 </p>
                 {message.files?.length ? (
@@ -298,18 +304,31 @@ function App() {
           </div>
 
           <form
-            className="mt-4 flex gap-3 max-md:flex-col"
+            className="mt-4 flex items-start gap-3 max-md:flex-col"
             onSubmit={handleQuestionSubmit}
           >
-            <input
-              className="min-w-0 flex-1 rounded-full border border-slate-300/10 bg-slate-950/45 px-4 py-3 text-slate-50 outline-none placeholder:text-slate-200/45"
+            <textarea
+              className="min-w-0 flex-1 resize-none rounded-3xl border border-slate-300/10 bg-slate-950/45 px-4 py-3 text-slate-50 outline-none placeholder:text-slate-200/45 min-h-[48px] max-h-[200px] overflow-y-auto"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               placeholder="What is the purpose of this repository?"
               disabled={!repoData || isAsking}
+              rows={1}
+              onInput={(event) => {
+                // Auto-resize textarea based on content
+                event.target.style.height = 'auto';
+                event.target.style.height = Math.min(event.target.scrollHeight, 200) + 'px';
+              }}
+              onKeyDown={(event) => {
+                // Submit on Enter, new line on Shift+Enter
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  handleQuestionSubmit(event);
+                }
+              }}
             />
             <button
-              className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65"
+              className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65 shrink-0"
               type="submit"
               disabled={!repoData || isAsking}
             >
