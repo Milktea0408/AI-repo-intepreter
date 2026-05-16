@@ -395,9 +395,7 @@ function App() {
                       {getRepoRelativePath(file.path)}
                     </strong>
                     <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 break-words">
-                      {file.snippet
-                        ? file.snippet.slice(0, 140)
-                        : "No preview available."}
+                      {file.summary || "Analyzing file purpose..."}
                     </p>
                   </article>
                 ))

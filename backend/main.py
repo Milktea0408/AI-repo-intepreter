@@ -234,8 +234,49 @@ def _detect_important_files(files: list[Path]) -> list[dict[str, Any]]:
                 "path": path.as_posix(),
                 "score": _score_file(path),
                 "snippet": snippet,
+                "summary": "",  # Will be filled by _generate_file_summaries
             }
         )
+    return important_files
+
+
+def _generate_file_summaries(important_files: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Generate AI summaries for important files."""
+    try:
+        client = _get_watsonx_client()
+        
+        for file_entry in important_files:
+            file_name = Path(file_entry["path"]).name
+            snippet = file_entry.get("snippet", "")[:800]  # Limit snippet size for prompt
+            
+            prompt = f"""Analyze this file and provide a brief 1 sentence summary of what it does:
+
+File: {file_name}
+Content preview:
+{snippet}
+
+Summary (1 sentence only):"""
+            
+            try:
+                messages = [{"role": "user", "content": prompt}]
+                response = client.chat(messages=messages)
+                summary = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                
+                if not summary:
+                    summary = f"Configuration or code file: {file_name}"
+                    
+                file_entry["summary"] = summary
+            except Exception as e:
+                print(f"Error generating summary for {file_name}: {e}")
+                file_entry["summary"] = f"Important file in the repository: {file_name}"
+                
+    except Exception as e:
+        print(f"Error initializing Watsonx client for summaries: {e}")
+        # Fallback summaries
+        for file_entry in important_files:
+            file_name = Path(file_entry["path"]).name
+            file_entry["summary"] = f"Key file in the repository: {file_name}"
+    
     return important_files
 
 
@@ -271,6 +312,7 @@ def _analyze_repository(root_dir: Path, repo_name: str) -> RepoRecord:
     tree = _build_tree(root_dir)
     tech_stack = _detect_tech_stack(files)
     important_files = _detect_important_files(files)
+    important_files = _generate_file_summaries(important_files)  # Generate AI summaries
     documents = _collect_text_documents(files)
 
     repo_id = uuid4().hex[:12]
