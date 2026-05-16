@@ -6,16 +6,16 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 // Extract the repository-relative path from a full file path
 function getRepoRelativePath(fullPath) {
   if (!fullPath) return fullPath;
-  
+
   // Look for common patterns that indicate the start of the repo content
   // Pattern: /extracted/{repo-name}/
   const extractedMatch = fullPath.match(/\/extracted\/[^/]+\/(.+)$/);
   if (extractedMatch) {
     return extractedMatch[1];
   }
-  
+
   // Fallback: just return the filename if no pattern matches
-  const parts = fullPath.split('/');
+  const parts = fullPath.split("/");
   return parts[parts.length - 1];
 }
 
@@ -37,7 +37,8 @@ function App() {
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState(new Set());
-  const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] = useState(true);
+  const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] =
+    useState(true);
 
   const techStack = repoData?.tech_stack || [];
   const importantFiles =
@@ -147,9 +148,9 @@ function App() {
     ]);
 
     // Reset textarea height
-    const textarea = event.target.querySelector('textarea');
+    const textarea = event.target.querySelector("textarea");
     if (textarea) {
-      textarea.style.height = 'auto';
+      textarea.style.height = "auto";
     }
 
     try {
@@ -297,7 +298,8 @@ function App() {
                 </p>
                 {message.files?.length ? (
                   <small className="block text-xs text-slate-300/60">
-                    Used files: {message.files.map(getRepoRelativePath).join(", ")}
+                    Used files:{" "}
+                    {message.files.map(getRepoRelativePath).join(", ")}
                   </small>
                 ) : null}
               </article>
@@ -317,12 +319,13 @@ function App() {
               rows={1}
               onInput={(event) => {
                 // Auto-resize textarea based on content
-                event.target.style.height = 'auto';
-                event.target.style.height = Math.min(event.target.scrollHeight, 200) + 'px';
+                event.target.style.height = "auto";
+                event.target.style.height =
+                  Math.min(event.target.scrollHeight, 200) + "px";
               }}
               onKeyDown={(event) => {
                 // Submit on Enter, new line on Shift+Enter
-                if (event.key === 'Enter' && !event.shiftKey) {
+                if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   handleQuestionSubmit(event);
                 }
@@ -403,13 +406,19 @@ function App() {
           <div className="mt-4 grid gap-3">
             <h3
               className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
-              onClick={() => setIsImportantFilesCollapsed(!isImportantFilesCollapsed)}
+              onClick={() =>
+                setIsImportantFilesCollapsed(!isImportantFilesCollapsed)
+              }
             >
-              {isImportantFilesCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+              {isImportantFilesCollapsed ? (
+                <ChevronRight size={20} />
+              ) : (
+                <ChevronDown size={20} />
+              )}
               Important files
             </h3>
             {!isImportantFilesCollapsed && (
-              <div className="grid gap-3">
+              <div className="max-h-[420px] overflow-y-auto pr-1 space-y-3">
                 {importantFiles.length ? (
                   importantFiles.map((file) => (
                     <article
@@ -425,7 +434,7 @@ function App() {
                     </article>
                   ))
                 ) : (
-                  <p className="text-slate-200/75">
+                  <p className="text-slate-200/75 text-sm">
                     The backend will surface entry points, config, routes, and
                     auth-related files here.
                   </p>
