@@ -290,7 +290,7 @@ function App() {
                 </p>
                 {message.files?.length ? (
                   <small className="block text-xs text-slate-300/60">
-                    Used files: {message.files.join(", ")}
+                    Used files: {message.files.map(getRepoRelativePath).join(", ")}
                   </small>
                 ) : null}
               </article>
