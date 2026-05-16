@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, Upload } from "lucide-react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
@@ -212,12 +212,16 @@ function App() {
               onChange={(event) =>
                 setSelectedFile(event.target.files?.[0] || null)
               }
+              className="hidden"
             />
-            <strong className="text-[1.08rem] font-semibold text-slate-50">
-              {selectedFile ? selectedFile.name : "Choose a .zip file"}
-            </strong>
+            <div className="flex items-center gap-3">
+              <Upload size={24} className="text-violet-400" />
+              <strong className="text-[1.08rem] font-semibold text-slate-50">
+                {selectedFile ? selectedFile.name : "Choose a .zip file"}
+              </strong>
+            </div>
             <span className="text-slate-200/75">
-              Backend will extract and analyze it.
+              Upload a repository and let Bob analyse it
             </span>
           </label>
 
@@ -240,6 +244,22 @@ function App() {
               Uploaded {repoData.repo_name}. Bob generated the dashboard below.
             </p>
           ) : null}
+
+          {!repoData && (
+            <div className="mt-2 rounded-2xl border border-violet-400/20 bg-violet-500/5 p-4">
+              <h3 className="m-0 mb-3 text-sm font-semibold uppercase tracking-wider text-violet-300">
+                Using the Application
+              </h3>
+              <ol className="m-0 space-y-2 pl-5 text-sm leading-6 text-slate-200/75 list-decimal">
+                <li className="pl-2">Download or create a .zip file of your repository</li>
+                <li className="pl-2">Click "Choose a .zip file" above to select it</li>
+                <li className="pl-2">Click "Analyze Repository" to upload and process</li>
+                <li className="pl-2">Explore the repository structure in the tree view</li>
+                <li className="pl-2">Ask questions about the codebase in the AI chat</li>
+                <li className="pl-2">Review generated insights and important files</li>
+              </ol>
+            </div>
+          )}
         </div>
       </section>
 
@@ -434,7 +454,7 @@ function App() {
                     </article>
                   ))
                 ) : (
-                  <p className="text-slate-200/75 text-sm">
+                  <p className="text-slate-200/75">
                     The backend will surface entry points, config, routes, and
                     auth-related files here.
                   </p>
