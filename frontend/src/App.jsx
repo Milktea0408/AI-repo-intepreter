@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import "./App.css";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -13,11 +14,55 @@ function App() {
       content: "Upload a repository zip and ask me how the codebase works.",
     },
   ]);
-  const [question, setQuestion] = useState("What is the purpose of this repository?");
+  const [question, setQuestion] = useState(
+    "What is the purpose of this repository?",
+  );
   const [isUploading, setIsUploading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState("");
+  const [collapsedFolders, setCollapsedFolders] = useState(new Set());
+
+  const techStack = repoData?.tech_stack || [];
+  const importantFiles =
+    summary?.important_files || repoData?.important_files || [];
+  const tree = repoData?.tree || [];
+  const isDashboardReady = Boolean(repoData);
+
+  // Get all folder paths to collapse them by default
+  const getAllFolderPaths = useCallback((nodes, parentPath = "") => {
+    const paths = [];
+    nodes.forEach((node) => {
+      const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.type === "directory" && node.children?.length > 0) {
+        paths.push(nodePath);
+        if (node.children) {
+          paths.push(...getAllFolderPaths(node.children, nodePath));
+        }
+      }
+    });
+    return paths;
+  }, []);
+
+  // Initialize collapsed folders when tree data is loaded
+  useEffect(() => {
+    if (tree.length > 0 && collapsedFolders.size === 0) {
+      const allFolderPaths = getAllFolderPaths(tree);
+      setCollapsedFolders(new Set(allFolderPaths));
+    }
+  }, [tree, collapsedFolders.size, getAllFolderPaths]);
+
+  const toggleFolder = useCallback((folderPath) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+  }, []);
 
   const handleUpload = async () => {
     if (!selectedFile) {
@@ -116,12 +161,6 @@ function App() {
     }
   };
 
-  const techStack = repoData?.tech_stack || [];
-  const importantFiles =
-    summary?.important_files || repoData?.important_files || [];
-  const tree = repoData?.tree || [];
-  const isDashboardReady = Boolean(repoData);
-
   return (
     <main className="app-shell">
       <section className="hero-panel">
@@ -189,7 +228,7 @@ function App() {
 
           <div className="tree-wrap">
             {tree.length ? (
-              renderTree(tree)
+              renderTree(tree, 0, collapsedFolders, toggleFolder)
             ) : (
               <p className="empty-state">
                 Upload a zip to see folders and files here.
@@ -225,7 +264,7 @@ function App() {
             <input
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
-              placeholder="How authentication works?"
+              placeholder="What is the purpose of this repository?"
               disabled={!repoData || isAsking}
             />
             <button
@@ -308,17 +347,57 @@ function App() {
   );
 }
 
-function renderTree(nodes, depth = 0) {
+function renderTree(
+  nodes,
+  depth = 0,
+  collapsedFolders = new Set(),
+  toggleFolder = () => {},
+  parentPath = "",
+) {
   return (
     <ul className="tree-list" style={{ "--depth": depth }}>
-      {nodes.map((node) => (
-        <li key={`${node.name}-${depth}`}>
-          <div className={`tree-node ${node.type}`}>
-            <span className="tree-name">{node.name}</span>
-          </div>
-          {node.children?.length ? renderTree(node.children, depth + 1) : null}
-        </li>
-      ))}
+      {nodes.map((node) => {
+        const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+        const isDirectory = node.type === "directory";
+        const isCollapsed = collapsedFolders.has(nodePath);
+        const hasChildren = node.children?.length > 0;
+
+        return (
+          <li key={nodePath}>
+            <div
+              className={`tree-node ${node.type} ${isDirectory && hasChildren ? "has-children" : ""} ${isCollapsed ? "collapsed" : ""}`}
+              onClick={
+                isDirectory && hasChildren
+                  ? () => toggleFolder(nodePath)
+                  : undefined
+              }
+              style={{
+                cursor: isDirectory && hasChildren ? "pointer" : "default",
+              }}
+            >
+              {isDirectory && hasChildren && (
+                <span className="tree-toggle">
+                  {isCollapsed ? (
+                    <ChevronRight size={14} />
+                  ) : (
+                    <ChevronDown size={14} />
+                  )}
+                </span>
+              )}
+              <span className="tree-name">{node.name}</span>
+            </div>
+            {hasChildren && !isCollapsed
+              ? renderTree(
+                  node.children,
+                  depth + 1,
+                  collapsedFolders,
+                  toggleFolder,
+                  nodePath,
+                )
+              : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }

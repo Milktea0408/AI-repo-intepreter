@@ -188,6 +188,20 @@
 .tree-node {
   position: relative;
   padding: 7px 0 7px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.tree-node.has-children {
+  border-radius: 8px;
+  padding-left: 12px;
+  padding-right: 8px;
+}
+
+.tree-node.has-children:hover {
+  background: rgba(162, 174, 255, 0.08);
 }
 
 .tree-node::before {
@@ -202,6 +216,21 @@
 
 .tree-node.directory .tree-name {
   color: #fff1b3;
+}
+
+.tree-toggle {
+  color: rgba(162, 174, 255, 0.6);
+  user-select: none;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.tree-node.has-children:hover .tree-toggle {
+  color: rgba(162, 174, 255, 0.9);
 }
 
 .chat-panel {
