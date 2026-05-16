@@ -161,7 +161,7 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen p-8 text-slate-50 max-md:p-4">
+    <main className="min-h-screen overflow-x-hidden p-8 text-slate-50 max-md:p-4">
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.9fr)]">
         <div>
           <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -177,8 +177,8 @@ function App() {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl flex flex-col gap-4">
-          <label className="flex cursor-pointer flex-col gap-2 rounded-[20px] border border-dashed border-slate-300/20 bg-[linear-gradient(180deg,rgba(112,88,255,0.16),rgba(112,88,255,0.04))] p-5">
+        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md">
+          <label className="flex cursor-pointer flex-col gap-2 rounded-[20px] border border-dashed border-slate-300/20 bg-[linear-gradient(180deg,rgba(112,88,255,0.14),rgba(112,88,255,0.03))] p-5">
             <span className="text-[0.82rem] uppercase tracking-[0.08em] text-slate-300/80">
               Repository zip
             </span>
@@ -220,7 +220,7 @@ function App() {
       </section>
 
       <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-        <aside className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -248,7 +248,7 @@ function App() {
           </div>
         </aside>
 
-        <section className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl flex min-h-[660px] flex-col max-xl:min-h-[520px]">
+        <section className="flex min-h-165 flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint max-xl:min-h-130">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -302,7 +302,7 @@ function App() {
           </form>
         </section>
 
-        <aside className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint">
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
