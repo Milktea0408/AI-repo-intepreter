@@ -3,6 +3,22 @@ import { ChevronRight, ChevronDown } from "lucide-react";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
+// Extract the repository-relative path from a full file path
+function getRepoRelativePath(fullPath) {
+  if (!fullPath) return fullPath;
+  
+  // Look for common patterns that indicate the start of the repo content
+  // Pattern: /extracted/{repo-name}/
+  const extractedMatch = fullPath.match(/\/extracted\/[^/]+\/(.+)$/);
+  if (extractedMatch) {
+    return extractedMatch[1];
+  }
+  
+  // Fallback: just return the filename if no pattern matches
+  const parts = fullPath.split('/');
+  return parts[parts.length - 1];
+}
+
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [repoData, setRepoData] = useState(null);
@@ -375,7 +391,9 @@ function App() {
                     key={file.path}
                     className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 overflow-hidden"
                   >
-                    <strong className="block text-slate-50 break-words overflow-wrap-anywhere">{file.path}</strong>
+                    <strong className="block text-slate-50 break-words overflow-wrap-anywhere">
+                      {getRepoRelativePath(file.path)}
+                    </strong>
                     <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80 break-words">
                       {file.snippet
                         ? file.snippet.slice(0, 140)
