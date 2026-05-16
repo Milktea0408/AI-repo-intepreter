@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from "react";
-import HeroSection from "./components/HeroSection";
-import UploadSection from "./components/UploadSection";
-import RepositoryTree from "./components/RepositoryTree";
-import ChatSection from "./components/ChatSection";
-import InsightsPanel from "./components/InsightsPanel";
+import HeroSection from "./sections/HeroSection";
+import UploadSection from "./sections/UploadSection";
+import RepositoryTree from "./sections/RepositoryTree";
+import ChatSection from "./sections/ChatSection";
+import InsightsPanel from "./sections/InsightsPanel";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
