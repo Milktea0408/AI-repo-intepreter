@@ -1,4 +1,4 @@
-import { Upload } from "lucide-react";
+import { Upload, Loader2 } from "lucide-react";
 
 export default function UploadSection({
   selectedFile,
@@ -35,11 +35,14 @@ export default function UploadSection({
       </label>
 
       <button
-        className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65"
+        className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65 flex items-center justify-center gap-2"
         type="button"
         onClick={handleUpload}
-        disabled={isUploading}
+        disabled={isUploading || isSummarizing}
       >
+        {(isUploading || isSummarizing) && (
+          <Loader2 size={18} className="animate-spin" />
+        )}
         {isUploading
           ? "Uploading..."
           : isSummarizing

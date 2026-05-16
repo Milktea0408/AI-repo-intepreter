@@ -7,15 +7,13 @@ export default function RepositoryTree({
   toggleFolder,
 }) {
   return (
-    <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start flex flex-col">
+      <div className="sticky top-0 z-10 mb-4 flex items-start justify-between gap-3 bg-slate-950/90 pb-3 backdrop-blur-md">
         <div>
           <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
             Repository tree
           </p>
-          <h2 className="m-0 text-lg font-semibold text-slate-50">
-            Structure
-          </h2>
+          <h2 className="m-0 text-lg font-semibold text-slate-50">Structure</h2>
         </div>
         {repoData ? (
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-100">
@@ -24,7 +22,7 @@ export default function RepositoryTree({
         ) : null}
       </div>
 
-      <div className="grid gap-3">
+      <div className="max-h-[70vh] overflow-y-auto pr-1 grid gap-3">
         {tree.length ? (
           renderTree(tree, 0, collapsedFolders, toggleFolder)
         ) : (
