@@ -1,6 +1,5 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import "./App.css";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
@@ -162,23 +161,27 @@ function App() {
   };
 
   return (
-    <main className="app-shell">
-      <section className="hero-panel">
+    <main className="min-h-screen p-8 text-slate-50 max-md:p-4">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.9fr)]">
         <div>
-          <p className="eyebrow">IBM Bob repo interpreter</p>
-          <h1>
+          <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
+            IBM Bob repo interpreter
+          </p>
+          <h1 className="max-w-[10ch] text-[clamp(2.5rem,6vw,5rem)] font-semibold leading-[0.95] tracking-tight">
             Upload a repository. Get the architecture, the summary, and the
             answers.
           </h1>
-          <p className="hero-copy">
+          <p className="mt-4 max-w-[62ch] text-[1.05rem] leading-7 text-slate-200/80">
             This MVP extracts a zip, detects the stack, highlights important
             files, and uses Bob to generate onboarding notes and repository Q&A.
           </p>
         </div>
 
-        <div className="upload-card">
-          <label className="file-dropzone">
-            <span className="dropzone-label">Repository zip</span>
+        <div className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl flex flex-col gap-4">
+          <label className="flex cursor-pointer flex-col gap-2 rounded-[20px] border border-dashed border-slate-300/20 bg-[linear-gradient(180deg,rgba(112,88,255,0.16),rgba(112,88,255,0.04))] p-5">
+            <span className="text-[0.82rem] uppercase tracking-[0.08em] text-slate-300/80">
+              Repository zip
+            </span>
             <input
               type="file"
               accept=".zip,application/zip"
@@ -186,14 +189,16 @@ function App() {
                 setSelectedFile(event.target.files?.[0] || null)
               }
             />
-            <strong>
+            <strong className="text-[1.08rem] font-semibold text-slate-50">
               {selectedFile ? selectedFile.name : "Choose a .zip file"}
             </strong>
-            <span>Backend will extract and analyze it.</span>
+            <span className="text-slate-200/75">
+              Backend will extract and analyze it.
+            </span>
           </label>
 
           <button
-            className="primary-button"
+            className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65"
             type="button"
             onClick={handleUpload}
             disabled={isUploading}
@@ -205,70 +210,90 @@ function App() {
                 : "Analyze Repository"}
           </button>
 
-          {error ? <p className="status-message error">{error}</p> : null}
+          {error ? <p className="m-0 text-sm text-rose-200">{error}</p> : null}
           {repoData ? (
-            <p className="status-message success">
+            <p className="m-0 text-sm text-emerald-200">
               Uploaded {repoData.repo_name}. Bob generated the dashboard below.
             </p>
           ) : null}
         </div>
       </section>
 
-      <section
-        className={`dashboard ${isDashboardReady ? "visible" : "empty"}`}
-      >
-        <aside className="panel tree-panel">
-          <div className="panel-header">
+      <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.1fr)_minmax(280px,0.9fr)]">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <p className="panel-kicker">Repository tree</p>
-              <h2>Structure</h2>
+              <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
+                Repository tree
+              </p>
+              <h2 className="m-0 text-lg font-semibold text-slate-50">
+                Structure
+              </h2>
             </div>
-            {repoData ? <span className="pill">{repoData.repo_id}</span> : null}
+            {repoData ? (
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-100">
+                {repoData.repo_id}
+              </span>
+            ) : null}
           </div>
 
-          <div className="tree-wrap">
+          <div className="grid gap-3">
             {tree.length ? (
               renderTree(tree, 0, collapsedFolders, toggleFolder)
             ) : (
-              <p className="empty-state">
+              <p className="text-slate-200/70">
                 Upload a zip to see folders and files here.
               </p>
             )}
           </div>
         </aside>
 
-        <section className="panel chat-panel">
-          <div className="panel-header">
+        <section className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl flex min-h-[660px] flex-col max-xl:min-h-[520px]">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <p className="panel-kicker">AI chat</p>
-              <h2>Ask the repository</h2>
+              <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
+                AI chat
+              </p>
+              <h2 className="m-0 text-lg font-semibold text-slate-50">
+                Ask the repository
+              </h2>
             </div>
-            <span className="pill accent">IBM Bob</span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-300/10 px-3 py-2 text-sm text-cyan-100">
+              IBM Bob
+            </span>
           </div>
 
-          <div className="chat-stream">
+          <div className="flex-1 content-start overflow-auto pr-1">
             {messages.map((message, index) => (
               <article
                 key={`${message.role}-${index}`}
-                className={`chat-bubble ${message.role}`}
+                className={`rounded-2xl border border-white/10 p-4 ${message.role === "user" ? "ml-[12%] bg-cyan-300/10 max-md:ml-0" : "mr-[12%] bg-violet-500/10 max-md:mr-0"}`}
               >
-                <p>{message.content}</p>
+                <p className="m-0 mb-2 leading-7 text-slate-200/80">
+                  {message.content}
+                </p>
                 {message.files?.length ? (
-                  <small>Used files: {message.files.join(", ")}</small>
+                  <small className="block text-xs text-slate-300/60">
+                    Used files: {message.files.join(", ")}
+                  </small>
                 ) : null}
               </article>
             ))}
           </div>
 
-          <form className="chat-form" onSubmit={handleQuestionSubmit}>
+          <form
+            className="mt-4 flex gap-3 max-md:flex-col"
+            onSubmit={handleQuestionSubmit}
+          >
             <input
+              className="min-w-0 flex-1 rounded-full border border-slate-300/10 bg-slate-950/45 px-4 py-3 text-slate-50 outline-none placeholder:text-slate-200/45"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               placeholder="What is the purpose of this repository?"
               disabled={!repoData || isAsking}
             />
             <button
-              className="primary-button"
+              className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65"
               type="submit"
               disabled={!repoData || isAsking}
             >
@@ -277,56 +302,81 @@ function App() {
           </form>
         </section>
 
-        <aside className="panel insights-panel">
-          <div className="panel-header">
+        <aside className="rounded-3xl border border-white/10 bg-slate-950/70 p-5 shadow-[0_24px_80px_rgba(4,6,20,0.48)] backdrop-blur-xl">
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <p className="panel-kicker">Generated insights</p>
-              <h2>What Bob found</h2>
+              <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
+                Generated insights
+              </p>
+              <h2 className="m-0 text-lg font-semibold text-slate-50">
+                What Bob found
+              </h2>
             </div>
           </div>
 
-          <div className="insight-group">
-            <h3>Tech stack</h3>
-            <div className="tag-row">
+          <div className="grid gap-3">
+            <h3 className="m-0 text-lg font-semibold text-slate-50">
+              Tech stack
+            </h3>
+            <div className="flex flex-wrap gap-2">
               {techStack.length ? (
                 techStack.map((item) => (
-                  <span key={item} className="tag">
+                  <span
+                    key={item}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-slate-100"
+                  >
                     {item}
                   </span>
                 ))
               ) : (
-                <span className="muted">Upload a repo first.</span>
+                <span className="text-slate-200/75">Upload a repo first.</span>
               )}
             </div>
           </div>
 
-          <div className="insight-group">
-            <h3>Onboarding summary</h3>
+          <div className="mt-4 grid gap-3">
+            <h3 className="m-0 text-lg font-semibold text-slate-50">
+              Onboarding summary
+            </h3>
             {summary ? (
-              <div className="summary-copy">
-                <p>{summary.project_overview}</p>
-                <p>{summary.architecture_explanation}</p>
-                <ul>
+              <div className="grid gap-3">
+                <p className="m-0 leading-7 text-slate-200/80">
+                  {summary.project_overview}
+                </p>
+                <p className="m-0 leading-7 text-slate-200/80">
+                  {summary.architecture_explanation}
+                </p>
+                <h4 className="m-0 pt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300/70">
+                  Notes
+                </h4>
+                <ul className="m-0 grid list-none gap-2 p-0">
                   {summary.learning_roadmap.map((step) => (
-                    <li key={step}>{step}</li>
+                    <li key={step} className="leading-6 text-slate-200/80">
+                      {step}
+                    </li>
                   ))}
                 </ul>
               </div>
             ) : (
-              <p className="muted">
+              <p className="text-slate-200/75">
                 Bob will generate the summary after upload.
               </p>
             )}
           </div>
 
-          <div className="insight-group">
-            <h3>Important files</h3>
-            <div className="files-list">
+          <div className="mt-4 grid gap-3">
+            <h3 className="m-0 text-lg font-semibold text-slate-50">
+              Important files
+            </h3>
+            <div className="grid gap-3">
               {importantFiles.length ? (
                 importantFiles.map((file) => (
-                  <article key={file.path} className="file-card">
-                    <strong>{file.path}</strong>
-                    <p>
+                  <article
+                    key={file.path}
+                    className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+                  >
+                    <strong className="block text-slate-50">{file.path}</strong>
+                    <p className="m-0 mt-2 block text-sm leading-6 text-slate-200/80">
                       {file.snippet
                         ? file.snippet.slice(0, 140)
                         : "No preview available."}
@@ -334,7 +384,7 @@ function App() {
                   </article>
                 ))
               ) : (
-                <p className="muted">
+                <p className="text-slate-200/75">
                   The backend will surface entry points, config, routes, and
                   auth-related files here.
                 </p>
@@ -355,7 +405,10 @@ function renderTree(
   parentPath = "",
 ) {
   return (
-    <ul className="tree-list" style={{ "--depth": depth }}>
+    <ul
+      className="m-0 list-none border-l border-slate-300/10 pl-3"
+      style={{ paddingLeft: depth ? "0.75rem" : 0 }}
+    >
       {nodes.map((node) => {
         const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
         const isDirectory = node.type === "directory";
@@ -365,18 +418,15 @@ function renderTree(
         return (
           <li key={nodePath}>
             <div
-              className={`tree-node ${node.type} ${isDirectory && hasChildren ? "has-children" : ""} ${isCollapsed ? "collapsed" : ""}`}
+              className={`group relative flex items-center gap-2 py-2 pl-4 transition-colors duration-200 before:absolute before:left-0 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:bg-slate-300/20 ${isDirectory && hasChildren ? "cursor-pointer rounded-lg px-3 hover:bg-slate-300/5" : ""} ${isDirectory ? "text-amber-200" : "text-slate-200/80"}`}
               onClick={
                 isDirectory && hasChildren
                   ? () => toggleFolder(nodePath)
                   : undefined
               }
-              style={{
-                cursor: isDirectory && hasChildren ? "pointer" : "default",
-              }}
             >
               {isDirectory && hasChildren && (
-                <span className="tree-toggle">
+                <span className="inline-flex shrink-0 items-center justify-center text-slate-300/60 transition group-hover:text-slate-100">
                   {isCollapsed ? (
                     <ChevronRight size={14} />
                   ) : (
@@ -384,7 +434,7 @@ function renderTree(
                   )}
                 </span>
               )}
-              <span className="tree-name">{node.name}</span>
+              <span>{node.name}</span>
             </div>
             {hasChildren && !isCollapsed
               ? renderTree(

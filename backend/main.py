@@ -250,6 +250,22 @@ def _collect_text_documents(files: list[Path]) -> list[dict[str, str]]:
     return documents
 
 
+def _extract_summary_section(text: str, start_marker: str, end_markers: list[str]) -> str:
+    lower_text = text.lower()
+    start_index = lower_text.find(start_marker.lower())
+    if start_index == -1:
+        return ""
+
+    start_index += len(start_marker)
+    end_index = len(text)
+    for marker in end_markers:
+        marker_index = lower_text.find(marker.lower(), start_index)
+        if marker_index != -1 and marker_index < end_index:
+            end_index = marker_index
+
+    return text[start_index:end_index].strip("\n :-")
+
+
 def _analyze_repository(root_dir: Path, repo_name: str) -> RepoRecord:
     files = [path for path in root_dir.rglob("*") if path.is_file()]
     tree = _build_tree(root_dir)
@@ -279,10 +295,18 @@ def _find_record(repo_id: str | None) -> RepoRecord:
 def _render_summary(record: RepoRecord) -> dict[str, Any]:
     important_paths = [entry["path"] for entry in record.important_files]
     
-    prompt = f"""Based on this repository analysis, provide:
-1. A brief project overview (2-3 sentences)
-2. Architecture explanation (how components work together)
-3. A 3-step learning roadmap for a new developer
+    prompt = f"""Based on this repository analysis, return the summary in this exact format:
+
+PROJECT_OVERVIEW:
+2-3 complete sentences.
+
+ARCHITECTURE_EXPLANATION:
+2-3 complete sentences.
+
+LEARNING_ROADMAP:
+- Step 1
+- Step 2
+- Step 3
 
 Repository: {record.repo_name}
 Tech Stack: {', '.join(record.tech_stack)}
@@ -305,9 +329,21 @@ Structure: {len(record.tree)} top-level entries"""
     return {
         "repo_id": record.repo_id,
         "generated_by": "IBM Bob (Watsonx)",
-        "project_overview": generated_text[:400] if generated_text else "Unable to generate overview.",
-        "architecture_explanation": generated_text[400:800] if generated_text else "Unable to generate architecture explanation.",
-        "learning_roadmap": [s.strip() for s in generated_text[800:].split('\n') if s.strip()][:3] or ["Review key files", "Trace data flow", "Understand API structure"],
+        "project_overview": _extract_summary_section(
+            generated_text,
+            "PROJECT_OVERVIEW:",
+            ["ARCHITECTURE_EXPLANATION:", "LEARNING_ROADMAP:"]
+        ) or "Unable to generate overview.",
+        "architecture_explanation": _extract_summary_section(
+            generated_text,
+            "ARCHITECTURE_EXPLANATION:",
+            ["LEARNING_ROADMAP:"]
+        ) or "Unable to generate architecture explanation.",
+        "learning_roadmap": [
+            line.lstrip("-• ").strip()
+            for line in _extract_summary_section(generated_text, "LEARNING_ROADMAP:", []).splitlines()
+            if line.strip()
+        ][:3] or ["Review key files", "Trace data flow", "Understand API structure"],
         "important_files": record.important_files,
     }
 
