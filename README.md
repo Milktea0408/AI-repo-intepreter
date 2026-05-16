@@ -1,7 +1,5 @@
 # AI Repo intepreter
 
-## Summary
-
 A repo interpreter for built for the IBM BOB Hackathon which helps users understand codebases quickly by analyzing repository structure and content.
 
 ## Setup
