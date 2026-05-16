@@ -197,16 +197,15 @@ function App() {
     <main className="min-h-screen overflow-x-hidden p-8 text-slate-50 max-md:p-4">
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.9fr)]">
         <div>
-          <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
+          <p className="mb-6 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
             IBM Bob repo interpreter
           </p>
           <h1 className="max-w-[10ch] text-[clamp(2.5rem,6vw,5rem)] font-semibold leading-[0.95] tracking-tight">
-            Upload a repository. Get the architecture, the summary, and the
-            answers.
+            Upload a repo. Get the architecture, summary, and answers.
           </h1>
           <p className="mt-4 max-w-[62ch] text-[1.05rem] leading-7 text-slate-200/80">
-            This MVP extracts a zip, detects the stack, highlights important
-            files, and uses Bob to generate onboarding notes and repository Q&A.
+            This application extracts a zip, detects the stack, highlights key files,
+            and uses Bob for onboarding notes and Q&A.
           </p>
         </div>
 
@@ -259,12 +258,24 @@ function App() {
               Using the Application
             </h3>
             <ol className="m-0 space-y-2 pl-5 text-sm leading-6 text-slate-200/75 list-decimal">
-              <li className="pl-2">Download or create a .zip file of your repository</li>
-              <li className="pl-2">Click "Choose a .zip file" above to select it</li>
-              <li className="pl-2">Click "Analyze Repository" to upload and process</li>
-              <li className="pl-2">Explore the repository structure in the tree view</li>
-              <li className="pl-2">Ask questions about the codebase in the AI chat</li>
-              <li className="pl-2">Review generated insights and important files</li>
+              <li className="pl-2">
+                Download or create a .zip file of your repository
+              </li>
+              <li className="pl-2">
+                Click "Choose a .zip file" above to select it
+              </li>
+              <li className="pl-2">
+                Click "Analyze Repository" to upload and process
+              </li>
+              <li className="pl-2">
+                Explore the repository structure in the tree view
+              </li>
+              <li className="pl-2">
+                Ask questions about the codebase in the AI chat
+              </li>
+              <li className="pl-2">
+                Review generated insights and important files
+              </li>
             </ol>
           </div>
         </div>
@@ -403,9 +414,15 @@ function App() {
           <div className="mt-4 grid gap-3">
             <h3
               className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
-              onClick={() => setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)}
+              onClick={() =>
+                setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)
+              }
             >
-              {isOnboardingSummaryCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+              {isOnboardingSummaryCollapsed ? (
+                <ChevronRight size={20} />
+              ) : (
+                <ChevronDown size={20} />
+              )}
               Onboarding summary
             </h3>
             {!isOnboardingSummaryCollapsed && (
