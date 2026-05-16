@@ -307,6 +307,10 @@ def _extract_summary_section(text: str, start_marker: str, end_markers: list[str
     return text[start_index:end_index].strip("\n :-")
 
 
+def _path_segments(path: str) -> list[str]:
+    return [segment.lower() for segment in Path(path).parts if segment and segment not in {".", ".."}]
+
+
 def _analyze_repository(root_dir: Path, repo_name: str) -> RepoRecord:
     files = [path for path in root_dir.rglob("*") if path.is_file()]
     tree = _build_tree(root_dir)
@@ -392,30 +396,32 @@ Structure: {len(record.tree)} top-level entries"""
 
 def _match_documents(record: RepoRecord, question: str) -> list[dict[str, str]]:
     tokens = {token for token in re.findall(r"[a-zA-Z0-9_]+", question.lower()) if len(token) > 2}
-    
-    # First pass: look for exact or partial filename matches
-    filename_matches = []
-    for doc in record.documents:
-        doc_name = doc["path"].lower()
-        # Check if any token matches the filename
-        for token in tokens:
-            if token in doc_name:
-                filename_matches.append((doc_name.count(token), doc))
-                break
-    
-    if filename_matches:
-        filename_matches.sort(key=lambda x: x[0], reverse=True)
-        return [doc for _, doc in filename_matches[:3]]
-    
-    # Fallback: token-based matching in file content
+
     ranked: list[tuple[int, dict[str, str]]] = []
     for document in record.documents:
+        path = document["path"].lower()
+        filename = Path(document["path"]).name.lower()
+        segments = _path_segments(document["path"])
         content = document["content"].lower()
-        score = sum(1 for token in tokens if token in content or token in document["path"].lower())
+
+        score = 0
+        for token in tokens:
+            if token == filename:
+                score += 12
+            if token in filename:
+                score += 8
+            if token in segments:
+                score += 10
+            if token in path:
+                score += 4
+            if token in content:
+                score += 1
+
         if score:
             ranked.append((score, document))
+
     ranked.sort(key=lambda item: item[0], reverse=True)
-    return [document for _, document in ranked[:3]]
+    return [document for _, document in ranked[:5]]
 
 
 def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
@@ -425,12 +431,17 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     for doc in matched_files:
         snippet = doc["content"][:1000].strip()
         name = Path(doc["path"]).name
-        contexts.append(f"=== {name} ===\n{snippet}")
+        contexts.append(f"=== {name} ({doc['path']}) ===\n{snippet}")
+
+    tree_context = "\n".join(
+        f"- {entry['name']}" for entry in record.tree[:20]
+    )
 
     system_msg = {
         "role": "system",
         "content": (
-            "You are a concise codebase assistant. Answer in plain natural language. "
+            "You are a concise codebase assistant. Answer only from the provided repository context. "
+            "If the relevant files are not present in the snippets, say so clearly instead of guessing. "
             "Do NOT output raw file system paths. If referencing a file, use only the filename."
         ),
     }
@@ -438,6 +449,8 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
         "role": "user",
         "content": (
             f"Question: {question}\n\n"
+            "Repository tree (top-level and nearby entries):\n"
+            f"{tree_context}\n\n"
             "Here are relevant file snippets:\n\n" + "\n\n".join(contexts) +
             "\n\nAnswer concisely (1-3 short paragraphs) referencing filenames if helpful."
         ),
