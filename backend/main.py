@@ -314,6 +314,22 @@ Structure: {len(record.tree)} top-level entries"""
 
 def _match_documents(record: RepoRecord, question: str) -> list[dict[str, str]]:
     tokens = {token for token in re.findall(r"[a-zA-Z0-9_]+", question.lower()) if len(token) > 2}
+    
+    # First pass: look for exact or partial filename matches
+    filename_matches = []
+    for doc in record.documents:
+        doc_name = doc["path"].lower()
+        # Check if any token matches the filename
+        for token in tokens:
+            if token in doc_name:
+                filename_matches.append((doc_name.count(token), doc))
+                break
+    
+    if filename_matches:
+        filename_matches.sort(key=lambda x: x[0], reverse=True)
+        return [doc for _, doc in filename_matches[:3]]
+    
+    # Fallback: token-based matching in file content
     ranked: list[tuple[int, dict[str, str]]] = []
     for document in record.documents:
         content = document["content"].lower()
@@ -326,40 +342,48 @@ def _match_documents(record: RepoRecord, question: str) -> list[dict[str, str]]:
 
 def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     matched_files = _match_documents(record, question)
-    matched_names = ", ".join(document["path"] for document in matched_files) if matched_files else "the top-level repo files"
-    
-    context = "\n".join([f"File: {doc['path']}\n{doc['content'][:500]}" for doc in matched_files])
-    prompt = f"""Answer this question about a repository:
-Question: {question}
+    # build short labelled snippets (trim long content)
+    contexts = []
+    for doc in matched_files:
+        snippet = doc["content"][:1000].strip()
+        name = Path(doc["path"]).name
+        contexts.append(f"=== {name} ===\n{snippet}")
 
-Relevant code:
-{context}
+    system_msg = {
+        "role": "system",
+        "content": (
+            "You are a concise codebase assistant. Answer in plain natural language. "
+            "Do NOT output raw file system paths. If referencing a file, use only the filename."
+        ),
+    }
+    user_msg = {
+        "role": "user",
+        "content": (
+            f"Question: {question}\n\n"
+            "Here are relevant file snippets:\n\n" + "\n\n".join(contexts) +
+            "\n\nAnswer concisely (1-3 short paragraphs) referencing filenames if helpful."
+        ),
+    }
 
-Provide a clear, concise answer referencing specific files or patterns."""
-    
     try:
         client = _get_watsonx_client()
-        messages = [{"role": "user", "content": prompt}]
-        response = client.chat(messages=messages)
-        
-        answer = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+        response = client.chat(messages=[system_msg, user_msg])
+        answer = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         if not answer:
-            answer = str(response)
-        
-        if not answer or not answer.strip():
             raise ValueError("Empty response from model")
-            
-    except Exception as e:
-        answer = f"IBM Bob reviewed the repository and found: {matched_names}. Check those files for implementation details."
+    except Exception:
+        answer = (
+            "I couldn't get a model response; open the matching files to inspect their contents. "
+            f"Matched files: {', '.join(Path(d['path']).name for d in matched_files)}"
+        )
 
     return {
         "repo_id": record.repo_id,
         "generated_by": "IBM Bob (Watsonx)",
         "question": question,
         "answer": answer,
-        "used_files": [document["path"] for document in matched_files],
+        "used_files": [d["path"] for d in matched_files],
     }
-
 
 @app.get("/")
 def read_root() -> dict[str, str]:
