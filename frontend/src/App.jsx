@@ -38,7 +38,9 @@ function App() {
   const [error, setError] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState(new Set());
   const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] =
-    useState(true);
+    useState(false);
+  const [isOnboardingSummaryCollapsed, setIsOnboardingSummaryCollapsed] =
+    useState(false);
 
   const techStack = repoData?.tech_stack || [];
   const importantFiles =
@@ -68,6 +70,13 @@ function App() {
       setCollapsedFolders(new Set(allFolderPaths));
     }
   }, [tree, collapsedFolders.size, getAllFolderPaths]);
+
+  // Collapse Important files section when repository is uploaded
+  useEffect(() => {
+    if (repoData) {
+      setIsImportantFilesCollapsed(true);
+    }
+  }, [repoData]);
 
   const toggleFolder = useCallback((folderPath) => {
     setCollapsedFolders((prev) => {
@@ -392,32 +401,40 @@ function App() {
           </div>
 
           <div className="mt-4 grid gap-3">
-            <h3 className="m-0 text-lg font-semibold text-slate-50">
+            <h3
+              className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
+              onClick={() => setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)}
+            >
+              {isOnboardingSummaryCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
               Onboarding summary
             </h3>
-            {summary ? (
-              <div className="grid gap-3">
-                <p className="m-0 leading-7 text-slate-200/80">
-                  {summary.project_overview}
-                </p>
-                <p className="m-0 leading-7 text-slate-200/80">
-                  {summary.architecture_explanation}
-                </p>
-                <h4 className="m-0 pt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300/70">
-                  Notes
-                </h4>
-                <ul className="m-0 grid list-none gap-2 p-0">
-                  {summary.learning_roadmap.map((step) => (
-                    <li key={step} className="leading-6 text-slate-200/80">
-                      {step}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-slate-200/75">
-                Bob will generate the summary after upload.
-              </p>
+            {!isOnboardingSummaryCollapsed && (
+              <>
+                {summary ? (
+                  <div className="grid gap-3">
+                    <p className="m-0 leading-7 text-slate-200/80">
+                      {summary.project_overview}
+                    </p>
+                    <p className="m-0 leading-7 text-slate-200/80">
+                      {summary.architecture_explanation}
+                    </p>
+                    <h4 className="m-0 pt-1 text-sm font-semibold uppercase tracking-[0.18em] text-slate-300/70">
+                      Notes
+                    </h4>
+                    <ul className="m-0 grid list-none gap-2 p-0">
+                      {summary.learning_roadmap.map((step) => (
+                        <li key={step} className="leading-6 text-slate-200/80">
+                          {step}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-slate-200/75">
+                    Bob will generate the summary after upload.
+                  </p>
+                )}
+              </>
             )}
           </div>
 
