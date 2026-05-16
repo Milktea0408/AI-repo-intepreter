@@ -182,7 +182,7 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden p-8 text-slate-50 max-md:p-4">
+    <main className="min-h-screen overflow-x-hidden px-8 py-12 text-slate-50 max-md:p-4">
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.9fr)]">
         <HeroSection />
         <UploadSection
