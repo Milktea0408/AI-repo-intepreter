@@ -263,7 +263,7 @@ function App() {
             </span>
           </div>
 
-          <div className="flex-1 content-start overflow-auto pr-1">
+          <div className="flex-1 content-start overflow-auto pr-1 space-y-5">
             {messages.map((message, index) => (
               <article
                 key={`${message.role}-${index}`}
