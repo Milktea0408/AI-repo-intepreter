@@ -1,4 +1,57 @@
+import { useState, useEffect, useRef } from "react";
 import { getRepoRelativePath } from "../utils/helpers";
+
+// Inline TypingIndicator component
+function TypingIndicator() {
+  return (
+    <article className="rounded-2xl border border-white/10 p-4 mr-[12%] bg-violet-500/10 max-md:mr-0">
+      <div className="flex items-center gap-1.5">
+        <div
+          className="h-2 w-2 rounded-full bg-violet-400"
+          style={{
+            animation: "typing-dot-bounce 1.4s infinite ease-in-out",
+            animationDelay: "0s",
+          }}
+        />
+        <div
+          className="h-2 w-2 rounded-full bg-violet-400"
+          style={{
+            animation: "typing-dot-bounce 1.4s infinite ease-in-out",
+            animationDelay: "0.2s",
+          }}
+        />
+        <div
+          className="h-2 w-2 rounded-full bg-violet-400"
+          style={{
+            animation: "typing-dot-bounce 1.4s infinite ease-in-out",
+            animationDelay: "0.4s",
+          }}
+        />
+      </div>
+    </article>
+  );
+}
+
+// Typewriter effect component for AI messages
+function TypewriterText({ text, onComplete }) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText((prev) => prev + text[currentIndex]);
+        setCurrentIndex((prev) => prev + 1);
+      }, 25); // 25ms per character for smooth typing effect
+
+      return () => clearTimeout(timeout);
+    } else if (onComplete && currentIndex === text.length && text.length > 0) {
+      onComplete();
+    }
+  }, [currentIndex, text, onComplete]);
+
+  return displayedText;
+}
 
 export default function ChatSection({
   messages,
@@ -8,6 +61,26 @@ export default function ChatSection({
   repoData,
   isAsking,
 }) {
+  const [typingMessageIndex, setTypingMessageIndex] = useState(null);
+  const messagesEndRef = useRef(null);
+  const prevMessagesLengthRef = useRef(messages.length);
+
+  // Detect when a new AI message arrives
+  useEffect(() => {
+    if (messages.length > prevMessagesLengthRef.current) {
+      const lastMessage = messages[messages.length - 1];
+      // Only apply typewriter effect to AI messages (not user messages)
+      if (lastMessage.role === "assistant") {
+        setTypingMessageIndex(messages.length - 1);
+      }
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages]);
+
+  // Auto-scroll to bottom when new content appears
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typingMessageIndex]);
   return (
     <section className="flex h-[700px] flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
       <div className="mb-4 flex items-start justify-between gap-3 shrink-0">
@@ -31,7 +104,14 @@ export default function ChatSection({
             className={`rounded-2xl border border-white/10 p-4 ${message.role === "user" ? "ml-[12%] bg-cyan-300/10 max-md:ml-0" : "mr-[12%] bg-violet-500/10 max-md:mr-0"}`}
           >
             <p className="m-0 mb-2 text-sm leading-6 text-slate-200/80 break-words whitespace-pre-wrap">
-              {message.content}
+              {message.role === "assistant" && index === typingMessageIndex ? (
+                <TypewriterText
+                  text={message.content}
+                  onComplete={() => setTypingMessageIndex(null)}
+                />
+              ) : (
+                message.content
+              )}
             </p>
             {message.files?.length ? (
               <small className="block text-xs text-slate-300/60">
@@ -41,6 +121,8 @@ export default function ChatSection({
             ) : null}
           </article>
         ))}
+        {isAsking && <TypingIndicator />}
+        <div ref={messagesEndRef} />
       </div>
 
       <form
