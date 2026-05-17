@@ -10,20 +10,28 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import logging
 from ibm_watsonx_ai import Credentials, APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+# configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
 WATSONX_URL = os.getenv("WATSONX_URL")
+WATSONX_PLATFORM_URL = os.getenv("WATSONX_PLATFORM_URL")
 WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-8b-code-instruct")
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_EXTRACTED_BYTES = 150 * 1024 * 1024
@@ -36,6 +44,19 @@ WATSONX_PARAMS = {
 }
 DEBUG_LLM_ERRORS = os.getenv("DEBUG_LLM_ERRORS", "").lower() in {"1", "true", "yes"}
 
+
+def _derive_watsonx_platform_url(watsonx_url: str | None) -> str | None:
+    if WATSONX_PLATFORM_URL:
+        return WATSONX_PLATFORM_URL
+    if not watsonx_url:
+        return None
+
+    host = urlparse(watsonx_url).netloc
+    if host == "au-syd.ml.cloud.ibm.com":
+        return "https://api.au-syd.dai.cloud.ibm.com"
+    return None
+
+
 def _get_watsonx_client():
     missing = _missing_watsonx_env()
     if missing:
@@ -44,6 +65,7 @@ def _get_watsonx_client():
     credentials = Credentials(
         url=WATSONX_URL,
         api_key=WATSONX_API_KEY,
+        platform_url=_derive_watsonx_platform_url(WATSONX_URL),
     )
     api_client = APIClient(credentials, project_id=WATSONX_PROJECT_ID)
 
@@ -98,6 +120,99 @@ def _safe_error_detail(error: Exception) -> dict[str, str]:
         detail["message"] = escape(safe_message[:240])
     return detail
 
+
+def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
+    role_labels = {
+        "system": "System",
+        "user": "User",
+        "assistant": "Assistant",
+    }
+    rendered_messages = []
+    for message in messages:
+        role = role_labels.get(message.get("role", "user"), "User")
+        rendered_messages.append(f"{role}: {message.get('content', '')}")
+    rendered_messages.append("Assistant:")
+    return "\n\n".join(rendered_messages)
+
+
+def _extract_model_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response.strip()
+
+    if not isinstance(response, dict):
+        logger.warning("Unexpected response type from Watsonx: %s — value: %r", type(response), response)
+        return ""
+
+    choices = response.get("choices")
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0]
+        if isinstance(first_choice, dict):
+            message = first_choice.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+            text = first_choice.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+
+    results = response.get("results")
+    if isinstance(results, list) and results:
+        first_result = results[0]
+        if isinstance(first_result, dict):
+            for key in ("generated_text", "text"):
+                value = first_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+    for key in ("generated_text", "text", "output"):
+        value = response.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    logger.warning("Could not extract text from Watsonx response shape: %s", list(response.keys()))
+    return ""
+
+
+def _generate_with_watsonx(
+    messages: list[dict[str, str]],
+    *,
+    max_new_tokens: int = 400,
+    client: Any | None = None,
+) -> str:
+    client = client or _get_watsonx_client()
+    chat_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
+    text_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
+
+    chat_error = None
+    try:
+        response = client.chat(messages=messages, params=chat_params)
+        generated_text = _extract_model_text(response)
+        if generated_text:
+            return generated_text
+        logger.warning("Watsonx chat returned no extractable text; trying generate_text")
+    except Exception as e:
+        chat_error = e
+        logger.warning("Watsonx chat() failed with category=%s", _classify_watsonx_error(e))
+
+    try:
+        response = client.generate_text(
+            prompt=_messages_to_prompt(messages),
+            params=text_params,
+            raw_response=True,
+        )
+        result = _extract_model_text(response)
+        if result:
+            return result
+        logger.warning("generate_text also returned no extractable text")
+    except Exception as e:
+        logger.warning("Watsonx generate_text() failed with category=%s", _classify_watsonx_error(e))
+        if chat_error:
+            raise RuntimeError(f"Both chat and generate_text failed. chat error: {chat_error}") from e
+        raise
+
+    raise RuntimeError("Watsonx returned an empty response")
+
 app = FastAPI(title="IBM Hackathon Repo Analyzer")
 
 app.add_middleware(
@@ -127,6 +242,15 @@ TEXT_EXTENSIONS = {
     ".css",
     ".scss",
     ".xml",
+    ".cs",
+    ".meta",
+    ".unity",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".swift",
+    ".rb",
+    ".go",
 }
 
 IMPORTANT_NAME_HINTS = (
@@ -157,6 +281,11 @@ TECH_STACK_RULES = [
     ("Docker", lambda names: any(name == "dockerfile" or name.endswith("dockerfile") for name in names)),
     ("Java", lambda names: "pom.xml" in names or "build.gradle" in names),
     ("Go", lambda names: any(name.endswith(".go") for name in names)),
+    ("Unity / C#", lambda names: any(name.endswith(".cs") for name in names) or any(name.endswith(".unity") for name in names)),
+    ("Rust", lambda names: "cargo.toml" in names),
+    ("C++", lambda names: any(name.endswith((".cpp", ".h", ".hpp")) for name in names)),
+    ("Swift", lambda names: any(name.endswith(".swift") for name in names)),
+    ("Ruby", lambda names: "gemfile" in names),
 ]
 
 
@@ -310,12 +439,25 @@ def _detect_tech_stack(files: list[Path]) -> list[str]:
 def _score_file(path: Path) -> int:
     score = 0
     normalized_name = _normalize_name(path.name)
+    normalized_path = _normalize_name(path.as_posix())
+
+    # Apply penalties for junk files first
+    if path.suffix.lower() == ".meta":
+        score -= 10
+    if ".idea" in normalized_path:
+        score -= 10
+    if "fonts" in normalized_path:
+        score -= 10
+    if "license" in normalized_name and path.suffix.lower() != ".md":
+        score -= 8
+
+    # Add positive scores for important files
     for hint in IMPORTANT_NAME_HINTS:
         if hint in normalized_name:
             score += 4
     if path.name.lower() in {"readme.md", "package.json", "requirements.txt", "pyproject.toml", "makefile"}:
         score += 6
-    if path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx"}:
+    if path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx", ".cs", ".cpp", ".swift", ".kt", ".rb", ".go"}:
         score += 2
     return score
 
@@ -443,7 +585,12 @@ def _find_record(repo_id: str | None, snapshot: RepoSnapshot | None = None) -> R
 def _render_summary(record: RepoRecord) -> dict[str, Any]:
     important_paths = [entry["path"] for entry in record.important_files]
     context_paths = [doc["path"] for doc in record.documents[:8]]
-    
+
+    # Build file content snippets for context
+    file_context = ""
+    for entry in record.important_files[:3]:
+        file_context += f"\n\n=== {entry['path']} ===\n{entry['snippet'][:500]}"
+
     prompt = f"""Based on this repository analysis, return the summary in this exact format:
 
 PROJECT_OVERVIEW:
@@ -461,15 +608,18 @@ Repository: {record.repo_name}
 Tech Stack: {', '.join(record.tech_stack)}
 Important Files: {', '.join(important_paths[:5])}
 Available Context Files: {', '.join(context_paths)}
-Structure: {len(record.tree)} top-level entries"""
+Structure: {len(record.tree)} top-level entries
+
+Key File Contents:{file_context}"""
     
     llm_available = True
     llm_error = None
     try:
         messages = [{"role": "user", "content": prompt}]
-        generated_text = _call_watsonx(messages=messages, prompt=prompt)
+        generated_text = _generate_with_watsonx(messages, max_new_tokens=500)
             
     except Exception as exc:
+        logger.warning("Summary Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
         llm_available = False
         llm_error = _safe_error_detail(exc.__cause__ or exc)
         generated_text = f"""PROJECT_OVERVIEW:
@@ -536,46 +686,6 @@ def _match_documents(record: RepoRecord, question: str) -> list[dict[str, str]]:
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [document for _, document in ranked[:5]]
 
-
-def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
-    return "\n\n".join(
-        f"{message.get('role', 'user').upper()}:\n{message.get('content', '')}"
-        for message in messages
-    )
-
-
-def _extract_chat_text(response: dict[str, Any]) -> str:
-    return response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-
-
-def _call_watsonx(messages: list[dict[str, str]], prompt: str | None = None) -> str:
-    client = _get_watsonx_client()
-    errors: list[Exception] = []
-    try:
-        response = client.chat(messages=messages, params=WATSONX_PARAMS)
-        text = _extract_chat_text(response)
-        if text:
-            return text
-    except Exception as exc:
-        errors.append(exc)
-
-    try:
-        text = client.generate_text(
-            prompt=prompt or _messages_to_prompt(messages),
-            params=WATSONX_PARAMS,
-        )
-        if isinstance(text, str) and text.strip():
-            return text.strip()
-    except Exception as exc:
-        errors.append(exc)
-
-    if errors:
-        raise RuntimeError(
-            "Watsonx request failed after chat and text-generation attempts"
-        ) from errors[-1]
-    raise RuntimeError("Watsonx returned an empty response")
-
-
 def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     matched_files = _match_documents(record, question)
     # build short labelled snippets (trim long content)
@@ -611,11 +721,11 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     llm_available = True
     llm_error = None
     try:
-        answer = _call_watsonx(
-            messages=[system_msg, user_msg],
-            prompt=_messages_to_prompt([system_msg, user_msg]),
-        )
+        answer = _generate_with_watsonx([system_msg, user_msg], max_new_tokens=450)
+        if not answer:
+            raise ValueError("Empty response from model")
     except Exception as exc:
+        logger.warning("Ask Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
         llm_available = False
         llm_error = _safe_error_detail(exc.__cause__ or exc)
         answer = (
