@@ -44,6 +44,7 @@ cd backend
 WATSONX_API_KEY=your_api_key_here
 WATSONX_PROJECT_ID=your_project_id_here
 WATSONX_URL=https://us-south.ml.cloud.ibm.com
+WATSONX_MODEL_ID=ibm/granite-8b-code-instruct
 ```
 
 3. Install dependencies and run:
@@ -71,7 +72,12 @@ cd frontend
 npm install
 ```
 
-3. Start the development server:
+3. Configure the backend URL. For local development, copy `frontend/.env.example` or create:
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+4. Start the development server:
 ```bash
 npm run dev     # Starts Vite dev server at http://localhost:5173
 ```
@@ -92,13 +98,30 @@ npm run preview # Preview production build
    - **AI Chat**: Ask questions about the codebase
    - **Generated Insights**: View tech stack, onboarding summary, and important files
 
+## Deployment Environment Variables
+
+### Backend
+Set these on your backend host:
+```env
+WATSONX_API_KEY=your_api_key_here
+WATSONX_PROJECT_ID=your_project_id_here
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+WATSONX_MODEL_ID=ibm/granite-8b-code-instruct
+```
+
+### Frontend
+Set this on your frontend host. In production, the app requires it and will not fall back to localhost:
+```env
+VITE_API_BASE_URL=https://your-deployed-backend.example.com
+```
+
 ## Project Structure
 
 ```
 IBM_Hackathon/
 ├── backend/
 │   ├── main.py           # FastAPI application and endpoints
-│   ├── helpers.py        # Utility functions for analysis
+│   ├── api/index.py      # Vercel serverless entry point
 │   ├── requirements.txt  # Python dependencies
 │   └── Makefile         # Build and run commands
 ├── frontend/
@@ -143,6 +166,7 @@ IBM_Hackathon/
 - `POST /summary` - Generate onboarding summary
 - `POST /ask` - Ask questions about the repository
 - `GET /repo-tree` - Get repository structure
+- `GET /health` - Check backend and Watsonx environment status without exposing secrets
 
 ## License
 

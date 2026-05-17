@@ -5,6 +5,7 @@ import re
 import shutil
 import tempfile
 import zipfile
+from html import escape
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +14,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import logging
@@ -32,6 +33,16 @@ WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
 WATSONX_URL = os.getenv("WATSONX_URL")
 WATSONX_PLATFORM_URL = os.getenv("WATSONX_PLATFORM_URL")
 WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-8b-code-instruct")
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_EXTRACTED_BYTES = 150 * 1024 * 1024
+MAX_ARCHIVE_FILES = 4000
+MAX_DOCUMENTS = 30
+MAX_DOCUMENT_CHARS = 4000
+WATSONX_PARAMS = {
+    "max_new_tokens": 500,
+    "temperature": 0.2,
+}
+DEBUG_LLM_ERRORS = os.getenv("DEBUG_LLM_ERRORS", "").lower() in {"1", "true", "yes"}
 
 
 def _derive_watsonx_platform_url(watsonx_url: str | None) -> str | None:
@@ -47,8 +58,9 @@ def _derive_watsonx_platform_url(watsonx_url: str | None) -> str | None:
 
 
 def _get_watsonx_client():
-    if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
-        raise RuntimeError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set")
+    missing = _missing_watsonx_env()
+    if missing:
+        raise RuntimeError(f"Missing Watsonx environment variables: {', '.join(missing)}")
 
     credentials = Credentials(
         url=WATSONX_URL,
@@ -61,6 +73,52 @@ def _get_watsonx_client():
         api_client=api_client,
         model_id=WATSONX_MODEL_ID,
     )
+
+
+def _missing_watsonx_env() -> list[str]:
+    required = {
+        "WATSONX_API_KEY": WATSONX_API_KEY,
+        "WATSONX_PROJECT_ID": WATSONX_PROJECT_ID,
+        "WATSONX_URL": WATSONX_URL,
+    }
+    return [name for name, value in required.items() if not value]
+
+
+def _watsonx_env_status() -> dict[str, Any]:
+    missing = _missing_watsonx_env()
+    return {
+        "configured": not missing,
+        "missing": missing,
+        "model_id": WATSONX_MODEL_ID,
+    }
+
+
+def _classify_watsonx_error(error: Exception) -> str:
+    message = str(error).lower()
+    if isinstance(error, TimeoutError) or "timeout" in message or "timed out" in message:
+        return "timeout_or_network"
+    if "missing watsonx environment variables" in message:
+        return "missing_env"
+    if "401" in message or "403" in message or "unauthorized" in message or "forbidden" in message:
+        return "auth_or_permission"
+    if "404" in message or "model" in message or "project" in message or "region" in message:
+        return "model_project_or_region"
+    return "watsonx_request_failed"
+
+
+def _safe_error_detail(error: Exception) -> dict[str, str]:
+    detail = {
+        "type": type(error).__name__,
+        "category": _classify_watsonx_error(error),
+    }
+    if DEBUG_LLM_ERRORS:
+        safe_message = re.sub(
+            r"(?i)(api[_-]?key|token|password|secret)[^,\s}]*",
+            "[redacted]",
+            str(error),
+        )
+        detail["message"] = escape(safe_message[:240])
+    return detail
 
 
 def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
@@ -112,8 +170,7 @@ def _extract_model_text(response: Any) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
 
-    # Log the full response so you can see what shape it actually is
-    logger.warning("Could not extract text from Watsonx response. Full response: %r", response)
+    logger.warning("Could not extract text from Watsonx response shape: %s", list(response.keys()))
     return ""
 
 
@@ -124,20 +181,19 @@ def _generate_with_watsonx(
     client: Any | None = None,
 ) -> str:
     client = client or _get_watsonx_client()
-    chat_params = {"max_tokens": max_new_tokens, "temperature": 0.2}
+    chat_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
     text_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
 
     chat_error = None
     try:
         response = client.chat(messages=messages, params=chat_params)
-        logger.info("Watsonx chat raw response: %r", response)  # <-- KEY: log the raw response
         generated_text = _extract_model_text(response)
         if generated_text:
             return generated_text
         logger.warning("Watsonx chat returned no extractable text; trying generate_text")
     except Exception as e:
         chat_error = e
-        logger.exception("Watsonx chat() raised an exception: %s", e)
+        logger.warning("Watsonx chat() failed with category=%s", _classify_watsonx_error(e))
 
     try:
         response = client.generate_text(
@@ -145,18 +201,17 @@ def _generate_with_watsonx(
             params=text_params,
             raw_response=True,
         )
-        logger.info("Watsonx generate_text raw response: %r", response)  # <-- KEY
         result = _extract_model_text(response)
         if result:
             return result
         logger.warning("generate_text also returned no extractable text")
     except Exception as e:
-        logger.exception("Watsonx generate_text() also raised an exception: %s", e)
+        logger.warning("Watsonx generate_text() failed with category=%s", _classify_watsonx_error(e))
         if chat_error:
             raise RuntimeError(f"Both chat and generate_text failed. chat error: {chat_error}") from e
         raise
 
-    return ""
+    raise RuntimeError("Watsonx returned an empty response")
 
 app = FastAPI(title="IBM Hackathon Repo Analyzer")
 
@@ -240,7 +295,7 @@ class UploadResponse(BaseModel):
     tree: list[dict[str, Any]]
     tech_stack: list[str]
     important_files: list[dict[str, Any]]
-    documents: list[dict[str, str]]
+    documents: list[dict[str, str]] = Field(default_factory=list)
     generated_by: str
 
 
@@ -294,6 +349,22 @@ def _safe_extract(zip_file: zipfile.ZipFile, target_dir: Path) -> None:
             shutil.copyfileobj(source, sink)
 
 
+def _validate_zip_contents(zip_file: zipfile.ZipFile) -> None:
+    members = zip_file.infolist()
+    if len(members) > MAX_ARCHIVE_FILES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Repository zip has too many files. Please upload fewer than {MAX_ARCHIVE_FILES} files.",
+        )
+
+    total_size = sum(member.file_size for member in members)
+    if total_size > MAX_EXTRACTED_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Repository is too large after extraction. Please upload a smaller repository zip.",
+        )
+
+
 def _normalize_name(name: str) -> str:
     return name.lower().replace("\\", "/")
 
@@ -302,6 +373,16 @@ def _is_text_file(path: Path) -> bool:
     if path.suffix.lower() in TEXT_EXTENSIONS:
         return True
     return path.name.lower() in {"dockerfile", "makefile", "license", "readme"}
+
+
+def _should_skip_path(path: Path) -> bool:
+    ignored_dirs = {"__MACOSX", ".git", ".hg", ".svn", "node_modules", ".venv", "venv"}
+    for part in path.parts:
+        if part in ignored_dirs:
+            return True
+        if part.startswith(".") and part != ".env.example":
+            return True
+    return False
 
 
 def _read_text(path: Path, limit: int = 12000) -> str:
@@ -317,7 +398,7 @@ def _build_tree(current_dir: Path, depth: int = 0, max_depth: int = 5) -> list[d
 
     children: list[dict[str, Any]] = []
     for child in sorted(current_dir.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
-        if child.name.startswith(".") and child.name not in {".env", ".env.example"}:
+        if _should_skip_path(Path(child.name)):
             continue
         if child.is_dir():
             children.append(
@@ -359,7 +440,7 @@ def _score_file(path: Path) -> int:
     score = 0
     normalized_name = _normalize_name(path.name)
     normalized_path = _normalize_name(path.as_posix())
-    
+
     # Apply penalties for junk files first
     if path.suffix.lower() == ".meta":
         score -= 10
@@ -369,7 +450,7 @@ def _score_file(path: Path) -> int:
         score -= 10
     if "license" in normalized_name and path.suffix.lower() != ".md":
         score -= 8
-    
+
     # Add positive scores for important files
     for hint in IMPORTANT_NAME_HINTS:
         if hint in normalized_name:
@@ -381,7 +462,14 @@ def _score_file(path: Path) -> int:
     return score
 
 
-def _detect_important_files(files: list[Path]) -> list[dict[str, Any]]:
+def _display_path(path: Path, root_dir: Path) -> str:
+    try:
+        return path.relative_to(root_dir).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _detect_important_files(files: list[Path], root_dir: Path) -> list[dict[str, Any]]:
     scored_files = sorted(files, key=lambda path: (_score_file(path), len(path.parts)), reverse=True)
     selected_files = [path for path in scored_files if _score_file(path) > 0][:8]
     important_files: list[dict[str, Any]] = []
@@ -389,7 +477,7 @@ def _detect_important_files(files: list[Path]) -> list[dict[str, Any]]:
         snippet = _read_text(path, limit=1200)
         important_files.append(
             {
-                "path": path.as_posix(),
+                "path": _display_path(path, root_dir),
                 "score": _score_file(path),
                 "snippet": snippet,
                 "summary": "",  # Will be filled by _generate_file_summaries
@@ -399,52 +487,23 @@ def _detect_important_files(files: list[Path]) -> list[dict[str, Any]]:
 
 
 def _generate_file_summaries(important_files: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Generate AI summaries for important files."""
-    try:
-        client = _get_watsonx_client()
-        for file_entry in important_files:
-            file_name = Path(file_entry["path"]).name
-            snippet = file_entry.get("snippet", "")[:800]  # Limit snippet size for prompt
-
-            prompt = f"""Analyze this file and provide a brief 1 sentence summary of what it does:
-
-File: {file_name}
-Content preview:
-{snippet}
-
-Summary (1 sentence only):"""
-
-            try:
-                messages = [{"role": "user", "content": prompt}]
-                summary = _generate_with_watsonx(messages, max_new_tokens=80, client=client)
-
-                if not summary:
-                    logger.info("Empty summary from model for %s, using fallback text", file_name)
-                    summary = f"Configuration or code file: {file_name}"
-
-                file_entry["summary"] = summary
-            except Exception:
-                logger.exception("Error generating summary for %s", file_name)
-                file_entry["summary"] = f"Important file in the repository: {file_name}"
-
-    except Exception:
-        logger.exception("Error initializing Watsonx client for summaries")
-        # Fallback summaries
-        for file_entry in important_files:
-            file_name = Path(file_entry["path"]).name
-            file_entry["summary"] = f"Key file in the repository: {file_name}"
-
+    """Attach quick local summaries during upload; /summary does the AI work."""
+    for file_entry in important_files:
+        file_name = Path(file_entry["path"]).name
+        file_entry["summary"] = f"Key repository file: {file_name}"
     return important_files
 
 
-def _collect_text_documents(files: list[Path]) -> list[dict[str, str]]:
+def _collect_text_documents(files: list[Path], root_dir: Path) -> list[dict[str, str]]:
     documents: list[dict[str, str]] = []
     for path in files:
+        if len(documents) >= MAX_DOCUMENTS:
+            break
         if not _is_text_file(path):
             continue
-        content = _read_text(path)
+        content = _read_text(path, limit=MAX_DOCUMENT_CHARS)
         if content:
-            documents.append({"path": path.as_posix(), "content": content})
+            documents.append({"path": _display_path(path, root_dir), "content": content})
     return documents
 
 
@@ -469,12 +528,16 @@ def _path_segments(path: str) -> list[str]:
 
 
 def _analyze_repository(root_dir: Path, repo_name: str) -> RepoRecord:
-    files = [path for path in root_dir.rglob("*") if path.is_file()]
+    files = [
+        path
+        for path in root_dir.rglob("*")
+        if path.is_file() and not _should_skip_path(path.relative_to(root_dir))
+    ]
     tree = _build_tree(root_dir)
     tech_stack = _detect_tech_stack(files)
-    important_files = _detect_important_files(files)
-    important_files = _generate_file_summaries(important_files)  # Generate AI summaries
-    documents = _collect_text_documents(files)
+    important_files = _detect_important_files(files, root_dir)
+    important_files = _generate_file_summaries(important_files)
+    documents = _collect_text_documents(files, root_dir)
 
     repo_id = uuid4().hex[:12]
     return RepoRecord(
@@ -501,26 +564,33 @@ def _record_from_snapshot(snapshot: RepoSnapshot) -> RepoRecord:
 
 
 def _find_record(repo_id: str | None, snapshot: RepoSnapshot | None = None) -> RepoRecord:
+    target_id = repo_id or latest_repo_id
+    if target_id and target_id in repository_store:
+        return repository_store[target_id]
+
     if snapshot:
         return _record_from_snapshot(snapshot)
 
-    target_id = repo_id or latest_repo_id
-    if not target_id or target_id not in repository_store:
+    if not target_id:
         raise HTTPException(
             status_code=404,
             detail="No repository data was provided. Upload a repository first or send the repo snapshot with the request.",
         )
-    return repository_store[target_id]
+    raise HTTPException(
+        status_code=404,
+        detail="Repository context expired on the server. Please upload the repository again.",
+    )
 
 
 def _render_summary(record: RepoRecord) -> dict[str, Any]:
     important_paths = [entry["path"] for entry in record.important_files]
-    
+    context_paths = [doc["path"] for doc in record.documents[:8]]
+
     # Build file content snippets for context
     file_context = ""
     for entry in record.important_files[:3]:
         file_context += f"\n\n=== {entry['path']} ===\n{entry['snippet'][:500]}"
-    
+
     prompt = f"""Based on this repository analysis, return the summary in this exact format:
 
 PROJECT_OVERVIEW:
@@ -537,21 +607,37 @@ LEARNING_ROADMAP:
 Repository: {record.repo_name}
 Tech Stack: {', '.join(record.tech_stack)}
 Important Files: {', '.join(important_paths[:5])}
+Available Context Files: {', '.join(context_paths)}
 Structure: {len(record.tree)} top-level entries
 
 Key File Contents:{file_context}"""
     
+    llm_available = True
+    llm_error = None
     try:
         messages = [{"role": "user", "content": prompt}]
         generated_text = _generate_with_watsonx(messages, max_new_tokens=500)
+            
+    except Exception as exc:
+        logger.warning("Summary Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
+        llm_available = False
+        llm_error = _safe_error_detail(exc.__cause__ or exc)
+        generated_text = f"""PROJECT_OVERVIEW:
+Unable to reach Watsonx right now, so this summary uses local repository metadata for {record.repo_name}.
 
-    except Exception as e:
-        logger.exception("ERROR in _render_summary: %s", e)
-        generated_text = f"(Watsonx error: {str(e)}. Falling back to local analysis.)"
+ARCHITECTURE_EXPLANATION:
+The repository appears to use {', '.join(record.tech_stack)}. Review the important files list and repository tree for the main entry points.
+
+LEARNING_ROADMAP:
+- Review key files
+- Trace data flow
+- Understand API structure"""
     
     return {
         "repo_id": record.repo_id,
-        "generated_by": "IBM Bob (Watsonx)",
+        "generated_by": "IBM Bob (Watsonx)" if llm_available else "Local fallback",
+        "llm_available": llm_available,
+        "llm_error": llm_error,
         "project_overview": _extract_summary_section(
             generated_text,
             "PROJECT_OVERVIEW:",
@@ -600,7 +686,6 @@ def _match_documents(record: RepoRecord, question: str) -> list[dict[str, str]]:
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [document for _, document in ranked[:5]]
 
-
 def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     matched_files = _match_documents(record, question)
     # build short labelled snippets (trim long content)
@@ -633,21 +718,26 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
         ),
     }
 
+    llm_available = True
+    llm_error = None
     try:
         answer = _generate_with_watsonx([system_msg, user_msg], max_new_tokens=450)
         if not answer:
-            logger.info("Empty answer from model, raising to trigger fallback")
             raise ValueError("Empty response from model")
-    except Exception:
-        logger.exception("Error getting answer from Watsonx")
+    except Exception as exc:
+        logger.warning("Ask Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
+        llm_available = False
+        llm_error = _safe_error_detail(exc.__cause__ or exc)
         answer = (
-            "I couldn't get a model response; open the matching files to inspect their contents. "
+            "I couldn't get a Watsonx response right now. Open the matching files to inspect their contents. "
             f"Matched files: {', '.join(Path(d['path']).name for d in matched_files)}"
         )
 
     return {
         "repo_id": record.repo_id,
-        "generated_by": "IBM Bob (Watsonx)",
+        "generated_by": "IBM Bob (Watsonx)" if llm_available else "Local fallback",
+        "llm_available": llm_available,
+        "llm_error": llm_error,
         "question": question,
         "answer": answer,
         "used_files": [d["path"] for d in matched_files],
@@ -658,15 +748,36 @@ def read_root() -> dict[str, str]:
     return {"message": "The backend is running."}
 
 
+@app.get("/health")
+def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "watsonx": _watsonx_env_status(),
+    }
+
+
 @app.post("/upload", response_model=UploadResponse)
-async def upload_repo(file: UploadFile = File(...)) -> UploadResponse:
+async def upload_repo(
+    file: UploadFile = File(...),
+    content_length: int | None = Header(default=None),
+) -> UploadResponse:
     if not file.filename:
         raise HTTPException(status_code=400, detail="Please upload a zip file.")
+    if content_length and content_length > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Repository zip is too large. Please upload a .zip file under 50 MB.",
+        )
 
     upload_root = Path(tempfile.mkdtemp(prefix="repo-analyzer-"))
-    archive_path = upload_root / file.filename
+    archive_path = upload_root / Path(file.filename).name
     try:
         contents = await file.read()
+        if len(contents) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail="Repository zip is too large. Please upload a .zip file under 50 MB.",
+            )
         archive_path.write_bytes(contents)
         if not zipfile.is_zipfile(archive_path):
             raise HTTPException(status_code=400, detail="Only zip files are supported.")
@@ -674,6 +785,7 @@ async def upload_repo(file: UploadFile = File(...)) -> UploadResponse:
         extract_dir = upload_root / "extracted"
         extract_dir.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive_path) as zip_file:
+            _validate_zip_contents(zip_file)
             _safe_extract(zip_file, extract_dir)
 
         extracted_items = [path for path in extract_dir.iterdir() if path.name != "__MACOSX"]
@@ -700,25 +812,37 @@ async def upload_repo(file: UploadFile = File(...)) -> UploadResponse:
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail="Invalid zip archive.") from exc
     finally:
-        try:
-            if archive_path.exists():
-                archive_path.unlink()
-        except OSError:
-            pass
+        shutil.rmtree(upload_root, ignore_errors=True)
 
 
 @app.post("/summary")
 def generate_summary(payload: SummaryRequest) -> dict[str, Any]:
-    record = _find_record(payload.repo_id, payload.repo)
-    return _render_summary(record)
+    try:
+        record = _find_record(payload.repo_id, payload.repo)
+        return _render_summary(record)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Summary generation failed. Check backend Watsonx configuration and try again.",
+        ) from exc
 
 
 @app.post("/ask")
 def ask_repo_question(payload: AskRequest) -> dict[str, Any]:
-    record = _find_record(payload.repo_id, payload.repo)
-    if not payload.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty.")
-    return _answer_question(record, payload.question.strip())
+    try:
+        record = _find_record(payload.repo_id, payload.repo)
+        if not payload.question.strip():
+            raise HTTPException(status_code=400, detail="Question cannot be empty.")
+        return _answer_question(record, payload.question.strip())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Question answering failed. Check backend Watsonx configuration and try again.",
+        ) from exc
 
 
 @app.get("/repo-tree")

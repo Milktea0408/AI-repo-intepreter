@@ -50,8 +50,10 @@ export default function InsightsPanel({
       </div>
 
       <div className="mt-4 grid gap-3">
-        <h3
-          className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
+        <button
+          type="button"
+          aria-expanded={!isOnboardingSummaryCollapsed}
+          className="m-0 flex items-center gap-2 bg-transparent p-0 text-left text-lg font-semibold text-slate-50 transition-colors hover:text-violet-300"
           onClick={() =>
             setIsOnboardingSummaryCollapsed(!isOnboardingSummaryCollapsed)
           }
@@ -62,7 +64,7 @@ export default function InsightsPanel({
             <ChevronDown size={20} />
           )}
           Onboarding summary
-        </h3>
+        </button>
         {!isOnboardingSummaryCollapsed && (
           <>
             {summary ? (
@@ -94,8 +96,10 @@ export default function InsightsPanel({
       </div>
 
       <div className="mt-4 grid gap-3">
-        <h3
-          className="m-0 text-lg font-semibold text-slate-50 flex items-center gap-2 cursor-pointer hover:text-violet-300 transition-colors"
+        <button
+          type="button"
+          aria-expanded={!isImportantFilesCollapsed}
+          className="m-0 flex items-center gap-2 bg-transparent p-0 text-left text-lg font-semibold text-slate-50 transition-colors hover:text-violet-300"
           onClick={() =>
             setIsImportantFilesCollapsed(!isImportantFilesCollapsed)
           }
@@ -106,7 +110,7 @@ export default function InsightsPanel({
             <ChevronDown size={20} />
           )}
           Important files
-        </h3>
+        </button>
         {!isImportantFilesCollapsed && (
           <div className="max-h-105 overflow-y-auto pr-1 space-y-3">
             {importantFiles.length ? (

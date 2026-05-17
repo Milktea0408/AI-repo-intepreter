@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import HeroSection from "./sections/HeroSection";
 import UploadSection from "./sections/UploadSection";
 import DashboardHeader from "./sections/DashboardHeader";
@@ -6,7 +6,99 @@ import RepositoryTree from "./sections/RepositoryTree";
 import ChatSection from "./sections/ChatSection";
 import InsightsPanel from "./sections/InsightsPanel";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const apiBaseUrl =
+  configuredApiBaseUrl?.replace(/\/+$/, "") ||
+  (!import.meta.env.PROD ? "http://127.0.0.1:8000" : "");
+
+function getAllFolderPaths(nodes, parentPath = "") {
+  const paths = [];
+  nodes.forEach((node) => {
+    const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
+    if (node.type === "directory" && node.children?.length > 0) {
+      paths.push(nodePath);
+      paths.push(...getAllFolderPaths(node.children, nodePath));
+    }
+  });
+  return paths;
+}
+
+function getApiBaseUrl() {
+  if (!apiBaseUrl) {
+    throw new Error(
+      "Missing VITE_API_BASE_URL. Set it to your deployed backend URL before using the production frontend.",
+    );
+  }
+  return apiBaseUrl;
+}
+
+function debugApi(label, details) {
+  if (import.meta.env.DEV) {
+    console.info(`[api] ${label}`, details);
+  }
+}
+
+function describeLlmError(llmError) {
+  if (!llmError?.category) {
+    return "Watsonx did not respond, so Bob returned a local fallback.";
+  }
+
+  const messages = {
+    missing_env:
+      "Watsonx is missing required environment variables on the backend.",
+    auth_or_permission:
+      "Watsonx rejected the request. Check the API key, project ID, and project access.",
+    model_project_or_region:
+      "Watsonx could not use the configured model/project/region. Check WATSONX_MODEL_ID, WATSONX_PROJECT_ID, and WATSONX_URL.",
+    timeout_or_network:
+      "Watsonx timed out or could not be reached from the backend.",
+    watsonx_request_failed:
+      "Watsonx request failed on the backend.",
+  };
+
+  return `${messages[llmError.category] || messages.watsonx_request_failed} Bob returned a local fallback.`;
+}
+
+async function readApiResponse(response, fallbackMessage) {
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(data.detail || fallbackMessage);
+  }
+
+  return data;
+}
+
+async function postJson(path, payload, fallbackMessage) {
+  const baseUrl = getApiBaseUrl();
+  debugApi(path, {
+    url: `${baseUrl}${path}`,
+    hasRepoSnapshot: Boolean(payload.repo),
+    repoId: payload.repo_id,
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await readApiResponse(response, fallbackMessage);
+  } catch (apiError) {
+    if (apiError instanceof TypeError) {
+      throw new Error(
+        `${fallbackMessage} The backend could not be reached. Check VITE_API_BASE_URL and backend deployment.`,
+        { cause: apiError },
+      );
+    }
+    throw apiError;
+  }
+}
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -36,36 +128,6 @@ function App() {
     summary?.important_files || repoData?.important_files || [];
   const tree = repoData?.tree || [];
 
-  // Get all folder paths to collapse them by default
-  const getAllFolderPaths = useCallback((nodes, parentPath = "") => {
-    const paths = [];
-    nodes.forEach((node) => {
-      const nodePath = parentPath ? `${parentPath}/${node.name}` : node.name;
-      if (node.type === "directory" && node.children?.length > 0) {
-        paths.push(nodePath);
-        if (node.children) {
-          paths.push(...getAllFolderPaths(node.children, nodePath));
-        }
-      }
-    });
-    return paths;
-  }, []);
-
-  // Initialize collapsed folders when tree data is loaded
-  useEffect(() => {
-    if (tree.length > 0 && collapsedFolders.size === 0) {
-      const allFolderPaths = getAllFolderPaths(tree);
-      setCollapsedFolders(new Set(allFolderPaths));
-    }
-  }, [tree, collapsedFolders.size, getAllFolderPaths]);
-
-  // Collapse Important files section when repository is uploaded
-  useEffect(() => {
-    if (repoData) {
-      setIsImportantFilesCollapsed(true);
-    }
-  }, [repoData]);
-
   const toggleFolder = useCallback((folderPath) => {
     setCollapsedFolders((prev) => {
       const next = new Set(prev);
@@ -91,17 +153,18 @@ function App() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const uploadResponse = await fetch(`${apiBaseUrl}/upload`, {
+      const baseUrl = getApiBaseUrl();
+      const uploadResponse = await fetch(`${baseUrl}/upload`, {
         method: "POST",
         body: formData,
       });
 
-      const uploadData = await uploadResponse.json();
-      if (!uploadResponse.ok) {
-        throw new Error(uploadData.detail || "Upload failed.");
-      }
+      const uploadData = await readApiResponse(uploadResponse, "Upload failed.");
 
       setRepoData(uploadData);
+      setSummary(null);
+      setCollapsedFolders(new Set(getAllFolderPaths(uploadData.tree || [])));
+      setIsImportantFilesCollapsed(true);
       setMessages([
         {
           role: "assistant",
@@ -110,21 +173,19 @@ function App() {
       ]);
 
       setIsSummarizing(true);
-      const summaryResponse = await fetch(`${apiBaseUrl}/summary`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const summaryData = await postJson(
+        "/summary",
+        {
           repo_id: uploadData.repo_id,
           repo: uploadData,
-        }),
-      });
-
-      const summaryData = await summaryResponse.json();
-      if (!summaryResponse.ok) {
-        throw new Error(summaryData.detail || "Summary generation failed.");
-      }
+        },
+        "Summary generation failed.",
+      );
 
       setSummary(summaryData);
+      if (summaryData.llm_available === false) {
+        setError(describeLlmError(summaryData.llm_error));
+      }
     } catch (uploadError) {
       setError(uploadError.message);
     } finally {
@@ -134,7 +195,7 @@ function App() {
   };
 
   const handleQuestionSubmit = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || !repoData) {
       return;
@@ -147,27 +208,16 @@ function App() {
       { role: "user", content: trimmedQuestion },
     ]);
 
-    // Reset textarea height
-    const textarea = event.target.querySelector("textarea");
-    if (textarea) {
-      textarea.style.height = "auto";
-    }
-
     try {
-      const questionResponse = await fetch(`${apiBaseUrl}/ask`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const questionData = await postJson(
+        "/ask",
+        {
           repo_id: repoData.repo_id,
           repo: repoData,
           question: trimmedQuestion,
-        }),
-      });
-
-      const questionData = await questionResponse.json();
-      if (!questionResponse.ok) {
-        throw new Error(questionData.detail || "Question request failed.");
-      }
+        },
+        "Question request failed.",
+      );
 
       setMessages((currentMessages) => [
         ...currentMessages,
@@ -177,6 +227,9 @@ function App() {
           files: questionData.used_files,
         },
       ]);
+      if (questionData.llm_available === false) {
+        setError(describeLlmError(questionData.llm_error));
+      }
       setQuestion("");
     } catch (questionError) {
       setError(questionError.message);

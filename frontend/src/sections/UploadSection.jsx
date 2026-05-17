@@ -13,7 +13,7 @@ export default function UploadSection({
     <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md">
       <label className="flex cursor-pointer flex-col gap-2 rounded-[20px] border border-dashed border-slate-300/20 bg-[linear-gradient(180deg,rgba(112,88,255,0.14),rgba(112,88,255,0.03))] p-5">
         <span className="text-[0.82rem] uppercase tracking-[0.08em] text-slate-300/80">
-          Repository zip
+          Repository zip · 50 MB max
         </span>
         <input
           type="file"
@@ -21,7 +21,7 @@ export default function UploadSection({
           onChange={(event) =>
             setSelectedFile(event.target.files?.[0] || null)
           }
-          className="hidden"
+          className="sr-only"
         />
         <div className="flex items-center gap-3">
           <Upload size={24} className="text-violet-400" />
@@ -30,7 +30,7 @@ export default function UploadSection({
           </strong>
         </div>
         <span className="text-slate-200/75">
-          Upload a repository and let Bob analyse it
+          Upload a .zip repository up to 50 MB and let Bob analyse it
         </span>
       </label>
 
@@ -38,7 +38,7 @@ export default function UploadSection({
         className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65 flex items-center justify-center gap-2"
         type="button"
         onClick={handleUpload}
-        disabled={isUploading || isSummarizing}
+        disabled={!selectedFile || isUploading || isSummarizing}
       >
         {(isUploading || isSummarizing) && (
           <Loader2 size={18} className="animate-spin" />
