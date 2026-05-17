@@ -273,6 +273,7 @@ function App() {
         />
 
         <InsightsPanel
+          repoName={repoData?.repo_name}
           techStack={techStack}
           summary={summary}
           importantFiles={importantFiles}

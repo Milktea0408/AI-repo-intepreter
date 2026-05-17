@@ -1,5 +1,6 @@
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, FileDown } from "lucide-react";
 import { getRepoRelativePath } from "../utils/helpers";
+import jsPDF from "jspdf";
 
 function normalizeSummaryPaths(text) {
   if (!text) return text;
@@ -10,6 +11,7 @@ function normalizeSummaryPaths(text) {
 }
 
 export default function InsightsPanel({
+  repoName,
   techStack,
   summary,
   importantFiles,
@@ -18,6 +20,90 @@ export default function InsightsPanel({
   isImportantFilesCollapsed,
   setIsImportantFilesCollapsed,
 }) {
+  const handleExportPDF = () => {
+    if (!summary || !techStack.length) {
+      alert("Please wait for the repository analysis to complete before exporting.");
+      return;
+    }
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const maxWidth = pageWidth - 2 * margin;
+    let yPosition = margin;
+
+    // Helper function to add text with word wrap
+    const addText = (text, fontSize, isBold = false, color = [0, 0, 0]) => {
+      doc.setFontSize(fontSize);
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setTextColor(...color);
+      
+      const lines = doc.splitTextToSize(text, maxWidth);
+      lines.forEach((line) => {
+        if (yPosition > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(line, margin, yPosition);
+        yPosition += fontSize * 0.5;
+      });
+      yPosition += 5;
+    };
+
+    // Title
+    addText("Repository Onboarding Report", 20, true, [124, 58, 237]);
+    yPosition += 5;
+
+    // Repository Name
+    addText(`Repository: ${repoName || "Unknown"}`, 14, true);
+    yPosition += 5;
+
+    // Tech Stack Section
+    addText("Tech Stack", 16, true, [124, 58, 237]);
+    addText(techStack.join(", "), 11);
+    yPosition += 5;
+
+    // Project Overview Section
+    if (summary?.project_overview) {
+      addText("Project Overview", 16, true, [124, 58, 237]);
+      addText(normalizeSummaryPaths(summary.project_overview), 11);
+      yPosition += 5;
+    }
+
+    // Architecture Explanation Section
+    if (summary?.architecture_explanation) {
+      addText("Architecture Explanation", 16, true, [124, 58, 237]);
+      addText(normalizeSummaryPaths(summary.architecture_explanation), 11);
+      yPosition += 5;
+    }
+
+    // Learning Roadmap Section
+    if (summary?.learning_roadmap?.length) {
+      addText("Learning Roadmap", 16, true, [124, 58, 237]);
+      summary.learning_roadmap.forEach((step, index) => {
+        addText(`${index + 1}. ${normalizeSummaryPaths(step)}`, 11);
+      });
+      yPosition += 5;
+    }
+
+    // Important Files Section
+    if (importantFiles.length) {
+      addText("Important Files", 16, true, [124, 58, 237]);
+      importantFiles.forEach((file) => {
+        addText(getRepoRelativePath(file.path), 12, true);
+        if (file.summary) {
+          addText(file.summary, 10);
+        }
+        yPosition += 3;
+      });
+    }
+
+    // Save the PDF
+    const fileName = `${repoName || "repository"}_onboarding_report.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <aside className="rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -29,6 +115,16 @@ export default function InsightsPanel({
             What Bob found
           </h2>
         </div>
+        {summary && techStack.length > 0 && (
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/20 hover:text-violet-200"
+            title="Export onboarding report as PDF"
+          >
+            <FileDown size={16} />
+            Export Report
+          </button>
+        )}
       </div>
 
       <div className="grid gap-3">
