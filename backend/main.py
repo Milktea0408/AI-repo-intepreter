@@ -9,20 +9,42 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import logging
 from ibm_watsonx_ai import Credentials, APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+# configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 WATSONX_API_KEY = os.getenv("WATSONX_API_KEY")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
 WATSONX_URL = os.getenv("WATSONX_URL")
+WATSONX_PLATFORM_URL = os.getenv("WATSONX_PLATFORM_URL")
+WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-8b-code-instruct")
+
+
+def _derive_watsonx_platform_url(watsonx_url: str | None) -> str | None:
+    if WATSONX_PLATFORM_URL:
+        return WATSONX_PLATFORM_URL
+    if not watsonx_url:
+        return None
+
+    host = urlparse(watsonx_url).netloc
+    if host == "au-syd.ml.cloud.ibm.com":
+        return "https://api.au-syd.dai.cloud.ibm.com"
+    return None
+
 
 def _get_watsonx_client():
     if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
@@ -31,13 +53,110 @@ def _get_watsonx_client():
     credentials = Credentials(
         url=WATSONX_URL,
         api_key=WATSONX_API_KEY,
+        platform_url=_derive_watsonx_platform_url(WATSONX_URL),
     )
     api_client = APIClient(credentials, project_id=WATSONX_PROJECT_ID)
 
     return ModelInference(
         api_client=api_client,
-        model_id="ibm/granite-8b-code-instruct", # AI model used (can be changed)
+        model_id=WATSONX_MODEL_ID,
     )
+
+
+def _messages_to_prompt(messages: list[dict[str, str]]) -> str:
+    role_labels = {
+        "system": "System",
+        "user": "User",
+        "assistant": "Assistant",
+    }
+    rendered_messages = []
+    for message in messages:
+        role = role_labels.get(message.get("role", "user"), "User")
+        rendered_messages.append(f"{role}: {message.get('content', '')}")
+    rendered_messages.append("Assistant:")
+    return "\n\n".join(rendered_messages)
+
+
+def _extract_model_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response.strip()
+
+    if not isinstance(response, dict):
+        logger.warning("Unexpected response type from Watsonx: %s — value: %r", type(response), response)
+        return ""
+
+    choices = response.get("choices")
+    if isinstance(choices, list) and choices:
+        first_choice = choices[0]
+        if isinstance(first_choice, dict):
+            message = first_choice.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    return content.strip()
+            text = first_choice.get("text")
+            if isinstance(text, str) and text.strip():
+                return text.strip()
+
+    results = response.get("results")
+    if isinstance(results, list) and results:
+        first_result = results[0]
+        if isinstance(first_result, dict):
+            for key in ("generated_text", "text"):
+                value = first_result.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+    for key in ("generated_text", "text", "output"):
+        value = response.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    # Log the full response so you can see what shape it actually is
+    logger.warning("Could not extract text from Watsonx response. Full response: %r", response)
+    return ""
+
+
+def _generate_with_watsonx(
+    messages: list[dict[str, str]],
+    *,
+    max_new_tokens: int = 400,
+    client: Any | None = None,
+) -> str:
+    client = client or _get_watsonx_client()
+    chat_params = {"max_tokens": max_new_tokens, "temperature": 0.2}
+    text_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
+
+    chat_error = None
+    try:
+        response = client.chat(messages=messages, params=chat_params)
+        logger.info("Watsonx chat raw response: %r", response)  # <-- KEY: log the raw response
+        generated_text = _extract_model_text(response)
+        if generated_text:
+            return generated_text
+        logger.warning("Watsonx chat returned no extractable text; trying generate_text")
+    except Exception as e:
+        chat_error = e
+        logger.exception("Watsonx chat() raised an exception: %s", e)
+
+    try:
+        response = client.generate_text(
+            prompt=_messages_to_prompt(messages),
+            params=text_params,
+            raw_response=True,
+        )
+        logger.info("Watsonx generate_text raw response: %r", response)  # <-- KEY
+        result = _extract_model_text(response)
+        if result:
+            return result
+        logger.warning("generate_text also returned no extractable text")
+    except Exception as e:
+        logger.exception("Watsonx generate_text() also raised an exception: %s", e)
+        if chat_error:
+            raise RuntimeError(f"Both chat and generate_text failed. chat error: {chat_error}") from e
+        raise
+
+    return ""
 
 app = FastAPI(title="IBM Hackathon Repo Analyzer")
 
@@ -283,11 +402,10 @@ def _generate_file_summaries(important_files: list[dict[str, Any]]) -> list[dict
     """Generate AI summaries for important files."""
     try:
         client = _get_watsonx_client()
-        
         for file_entry in important_files:
             file_name = Path(file_entry["path"]).name
             snippet = file_entry.get("snippet", "")[:800]  # Limit snippet size for prompt
-            
+
             prompt = f"""Analyze this file and provide a brief 1 sentence summary of what it does:
 
 File: {file_name}
@@ -295,27 +413,27 @@ Content preview:
 {snippet}
 
 Summary (1 sentence only):"""
-            
+
             try:
                 messages = [{"role": "user", "content": prompt}]
-                response = client.chat(messages=messages)
-                summary = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-                
+                summary = _generate_with_watsonx(messages, max_new_tokens=80, client=client)
+
                 if not summary:
+                    logger.info("Empty summary from model for %s, using fallback text", file_name)
                     summary = f"Configuration or code file: {file_name}"
-                    
+
                 file_entry["summary"] = summary
-            except Exception as e:
-                print(f"Error generating summary for {file_name}: {e}")
+            except Exception:
+                logger.exception("Error generating summary for %s", file_name)
                 file_entry["summary"] = f"Important file in the repository: {file_name}"
-                
-    except Exception as e:
-        print(f"Error initializing Watsonx client for summaries: {e}")
+
+    except Exception:
+        logger.exception("Error initializing Watsonx client for summaries")
         # Fallback summaries
         for file_entry in important_files:
             file_name = Path(file_entry["path"]).name
             file_entry["summary"] = f"Key file in the repository: {file_name}"
-    
+
     return important_files
 
 
@@ -424,16 +542,11 @@ Structure: {len(record.tree)} top-level entries
 Key File Contents:{file_context}"""
     
     try:
-        client = _get_watsonx_client()
         messages = [{"role": "user", "content": prompt}]
-        response = client.chat(messages=messages)
-        
-        generated_text = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-        if not generated_text:
-            generated_text = str(response)
-            
+        generated_text = _generate_with_watsonx(messages, max_new_tokens=500)
+
     except Exception as e:
-        print(f"ERROR in _render_summary: {type(e).__name__}: {e}")
+        logger.exception("ERROR in _render_summary: %s", e)
         generated_text = f"(Watsonx error: {str(e)}. Falling back to local analysis.)"
     
     return {
@@ -521,12 +634,12 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     }
 
     try:
-        client = _get_watsonx_client()
-        response = client.chat(messages=[system_msg, user_msg])
-        answer = response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        answer = _generate_with_watsonx([system_msg, user_msg], max_new_tokens=450)
         if not answer:
+            logger.info("Empty answer from model, raising to trigger fallback")
             raise ValueError("Empty response from model")
     except Exception:
+        logger.exception("Error getting answer from Watsonx")
         answer = (
             "I couldn't get a model response; open the matching files to inspect their contents. "
             f"Matched files: {', '.join(Path(d['path']).name for d in matched_files)}"
