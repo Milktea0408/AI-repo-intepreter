@@ -34,7 +34,7 @@ function getApiBaseUrl() {
 
 function debugApi(label, details) {
   if (import.meta.env.DEV) {
-    // console.info(`[api] ${label}`, details);
+    console.info(`[api] ${label}`, details);
   }
 }
 
@@ -76,11 +76,11 @@ async function readApiResponse(response, fallbackMessage) {
 
 async function postJson(path, payload, fallbackMessage) {
   const baseUrl = getApiBaseUrl();
-  debugApi(path, {
-    url: `${baseUrl}${path}`,
-    hasRepoSnapshot: Boolean(payload.repo),
-    repoId: payload.repo_id,
-  });
+  // debugApi(path, {
+  //   url: `${baseUrl}${path}`,
+  //   hasRepoSnapshot: Boolean(payload.repo),
+  //   repoId: payload.repo_id,
+  // });
 
   try {
     const response = await fetch(`${baseUrl}${path}`, {
