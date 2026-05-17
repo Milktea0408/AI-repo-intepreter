@@ -119,8 +119,7 @@ export default function ChatSection({
             </p>
             {message.files?.length ? (
               <small className="block text-xs text-slate-300/60">
-                Used files:{" "}
-                {message.files.map(getRepoRelativePath).join(", ")}
+                Used files: {message.files.map(getRepoRelativePath).join(", ")}
               </small>
             ) : null}
           </article>
@@ -134,7 +133,7 @@ export default function ChatSection({
         onSubmit={handleQuestionSubmit}
       >
         <textarea
-          className="min-w-0 flex-1 resize-none rounded-3xl border border-slate-300/10 bg-slate-950/45 px-4 py-3 text-slate-50 outline-none placeholder:text-slate-200/45 min-h-[48px] max-h-[200px] overflow-y-auto"
+          className="min-w-[150px] flex-1 resize-none rounded-3xl border border-slate-300/10 bg-slate-950/45 px-4 py-3 text-slate-50 outline-none placeholder:text-slate-200/45 min-h-[48px] max-h-[200px] overflow-y-auto max-md:w-full"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="What is the purpose of this repository?"
@@ -155,7 +154,7 @@ export default function ChatSection({
           }}
         />
         <button
-          className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65 shrink-0"
+          className="rounded-full bg-[linear-gradient(135deg,#ffe16a,#86f1ff)] px-4 py-3 font-bold text-slate-900 shadow-[0_10px_28px_rgba(134,241,255,0.2)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-65 shrink-0 max-md:w-full"
           type="submit"
           disabled={!repoData || isAsking}
         >
