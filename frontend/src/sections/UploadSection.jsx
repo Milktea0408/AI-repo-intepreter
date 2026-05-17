@@ -3,6 +3,7 @@ import { Upload, Loader2 } from "lucide-react";
 export default function UploadSection({
   selectedFile,
   setSelectedFile,
+  uploadedFileName,
   handleUpload,
   isUploading,
   isSummarizing,
@@ -26,11 +27,13 @@ export default function UploadSection({
         <div className="flex items-center gap-3">
           <Upload size={24} className="text-violet-400" />
           <strong className="text-[1.08rem] font-semibold text-slate-50">
-            {selectedFile ? selectedFile.name : "Choose a .zip file"}
+            {selectedFile?.name || uploadedFileName || "Choose a .zip file"}
           </strong>
         </div>
         <span className="text-slate-200/75">
-          Upload a .zip repository up to 50 MB and let Bob analyse it
+          {uploadedFileName && !selectedFile
+            ? "Current session restored. Choose a new .zip to switch repositories."
+            : "Upload a .zip repository up to 50 MB and let Bob analyse it"}
         </span>
       </label>
 
@@ -53,7 +56,8 @@ export default function UploadSection({
       {error ? <p className="m-0 text-sm text-rose-200">{error}</p> : null}
       {repoData ? (
         <p className="m-0 text-sm text-emerald-200">
-          Uploaded {repoData.repo_name}. Bob generated the dashboard below.
+          Uploaded {uploadedFileName || repoData.repo_name}. Bob generated the
+          dashboard below.
         </p>
       ) : null}
 
