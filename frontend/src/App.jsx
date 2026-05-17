@@ -34,7 +34,7 @@ function getApiBaseUrl() {
 
 function debugApi(label, details) {
   if (import.meta.env.DEV) {
-    console.info(`[api] ${label}`, details);
+    // console.info(`[api] ${label}`, details);
   }
 }
 

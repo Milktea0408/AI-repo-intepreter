@@ -62,7 +62,6 @@ export default function ChatSection({
   isAsking,
 }) {
   const [typingMessageIndex, setTypingMessageIndex] = useState(null);
-  const messagesEndRef = useRef(null);
   const prevMessagesLengthRef = useRef(messages.length);
 
   // Detect when a new AI message arrives
@@ -81,10 +80,6 @@ export default function ChatSection({
     return () => clearTimeout(timeout);
   }, [messages]);
 
-  // Auto-scroll to bottom when new content appears
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingMessageIndex]);
   return (
     <section className="flex h-[min(700px,calc(100vh-160px))] min-h-[520px] flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start max-md:h-[620px] max-md:min-h-0">
       <div className="mb-4 flex items-start justify-between gap-3 shrink-0">
@@ -125,7 +120,6 @@ export default function ChatSection({
           </article>
         ))}
         {isAsking && <TypingIndicator />}
-        <div ref={messagesEndRef} />
       </div>
 
       <form
