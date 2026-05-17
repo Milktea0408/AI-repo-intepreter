@@ -14,7 +14,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ibm_watsonx_ai import Credentials, APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
 
@@ -24,10 +24,10 @@ WATSONX_API_KEY = os.getenv("WATSONX_API_KEY")
 WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
 WATSONX_URL = os.getenv("WATSONX_URL")
 
-if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
-    raise RuntimeError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set in .env")
-
 def _get_watsonx_client():
+    if not WATSONX_API_KEY or not WATSONX_PROJECT_ID:
+        raise RuntimeError("WATSONX_API_KEY and WATSONX_PROJECT_ID must be set")
+
     credentials = Credentials(
         url=WATSONX_URL,
         api_key=WATSONX_API_KEY,
@@ -43,8 +43,8 @@ app = FastAPI(title="IBM Hackathon Repo Analyzer")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -107,16 +107,28 @@ class UploadResponse(BaseModel):
     tree: list[dict[str, Any]]
     tech_stack: list[str]
     important_files: list[dict[str, Any]]
+    documents: list[dict[str, str]]
     generated_by: str
+
+
+class RepoSnapshot(BaseModel):
+    repo_id: str | None = None
+    repo_name: str
+    tree: list[dict[str, Any]]
+    tech_stack: list[str]
+    important_files: list[dict[str, Any]]
+    documents: list[dict[str, str]] = Field(default_factory=list)
 
 
 class AskRequest(BaseModel):
     repo_id: str | None = None
+    repo: RepoSnapshot | None = None
     question: str
 
 
 class SummaryRequest(BaseModel):
     repo_id: str | None = None
+    repo: RepoSnapshot | None = None
 
 
 @dataclass
@@ -331,10 +343,28 @@ def _analyze_repository(root_dir: Path, repo_name: str) -> RepoRecord:
     )
 
 
-def _find_record(repo_id: str | None) -> RepoRecord:
+def _record_from_snapshot(snapshot: RepoSnapshot) -> RepoRecord:
+    return RepoRecord(
+        repo_id=snapshot.repo_id or uuid4().hex[:12],
+        repo_name=snapshot.repo_name,
+        root_dir=Path("."),
+        tree=snapshot.tree,
+        tech_stack=snapshot.tech_stack,
+        important_files=snapshot.important_files,
+        documents=snapshot.documents,
+    )
+
+
+def _find_record(repo_id: str | None, snapshot: RepoSnapshot | None = None) -> RepoRecord:
+    if snapshot:
+        return _record_from_snapshot(snapshot)
+
     target_id = repo_id or latest_repo_id
     if not target_id or target_id not in repository_store:
-        raise HTTPException(status_code=404, detail="No repository has been uploaded yet.")
+        raise HTTPException(
+            status_code=404,
+            detail="No repository data was provided. Upload a repository first or send the repo snapshot with the request.",
+        )
     return repository_store[target_id]
 
 
@@ -515,6 +545,7 @@ async def upload_repo(file: UploadFile = File(...)) -> UploadResponse:
             tree=record.tree,
             tech_stack=record.tech_stack,
             important_files=record.important_files,
+            documents=record.documents,
             generated_by="IBM Bob",
         )
     except HTTPException:
@@ -531,13 +562,13 @@ async def upload_repo(file: UploadFile = File(...)) -> UploadResponse:
 
 @app.post("/summary")
 def generate_summary(payload: SummaryRequest) -> dict[str, Any]:
-    record = _find_record(payload.repo_id)
+    record = _find_record(payload.repo_id, payload.repo)
     return _render_summary(record)
 
 
 @app.post("/ask")
 def ask_repo_question(payload: AskRequest) -> dict[str, Any]:
-    record = _find_record(payload.repo_id)
+    record = _find_record(payload.repo_id, payload.repo)
     if not payload.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
     return _answer_question(record, payload.question.strip())

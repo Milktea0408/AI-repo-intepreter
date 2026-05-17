@@ -113,7 +113,10 @@ function App() {
       const summaryResponse = await fetch(`${apiBaseUrl}/summary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo_id: uploadData.repo_id }),
+        body: JSON.stringify({
+          repo_id: uploadData.repo_id,
+          repo: uploadData,
+        }),
       });
 
       const summaryData = await summaryResponse.json();
@@ -156,6 +159,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo_id: repoData.repo_id,
+          repo: repoData,
           question: trimmedQuestion,
         }),
       });
