@@ -68,6 +68,15 @@ TEXT_EXTENSIONS = {
     ".css",
     ".scss",
     ".xml",
+    ".cs",
+    ".meta",
+    ".unity",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".swift",
+    ".rb",
+    ".go",
 }
 
 IMPORTANT_NAME_HINTS = (
@@ -98,6 +107,11 @@ TECH_STACK_RULES = [
     ("Docker", lambda names: any(name == "dockerfile" or name.endswith("dockerfile") for name in names)),
     ("Java", lambda names: "pom.xml" in names or "build.gradle" in names),
     ("Go", lambda names: any(name.endswith(".go") for name in names)),
+    ("Unity / C#", lambda names: any(name.endswith(".cs") for name in names) or any(name.endswith(".unity") for name in names)),
+    ("Rust", lambda names: "cargo.toml" in names),
+    ("C++", lambda names: any(name.endswith((".cpp", ".h", ".hpp")) for name in names)),
+    ("Swift", lambda names: any(name.endswith(".swift") for name in names)),
+    ("Ruby", lambda names: "gemfile" in names),
 ]
 
 
@@ -225,12 +239,25 @@ def _detect_tech_stack(files: list[Path]) -> list[str]:
 def _score_file(path: Path) -> int:
     score = 0
     normalized_name = _normalize_name(path.name)
+    normalized_path = _normalize_name(path.as_posix())
+    
+    # Apply penalties for junk files first
+    if path.suffix.lower() == ".meta":
+        score -= 10
+    if ".idea" in normalized_path:
+        score -= 10
+    if "fonts" in normalized_path:
+        score -= 10
+    if "license" in normalized_name and path.suffix.lower() != ".md":
+        score -= 8
+    
+    # Add positive scores for important files
     for hint in IMPORTANT_NAME_HINTS:
         if hint in normalized_name:
             score += 4
     if path.name.lower() in {"readme.md", "package.json", "requirements.txt", "pyproject.toml", "makefile"}:
         score += 6
-    if path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx"}:
+    if path.suffix.lower() in {".py", ".js", ".jsx", ".ts", ".tsx", ".cs", ".cpp", ".swift", ".kt", ".rb", ".go"}:
         score += 2
     return score
 
@@ -371,6 +398,11 @@ def _find_record(repo_id: str | None, snapshot: RepoSnapshot | None = None) -> R
 def _render_summary(record: RepoRecord) -> dict[str, Any]:
     important_paths = [entry["path"] for entry in record.important_files]
     
+    # Build file content snippets for context
+    file_context = ""
+    for entry in record.important_files[:3]:
+        file_context += f"\n\n=== {entry['path']} ===\n{entry['snippet'][:500]}"
+    
     prompt = f"""Based on this repository analysis, return the summary in this exact format:
 
 PROJECT_OVERVIEW:
@@ -387,7 +419,9 @@ LEARNING_ROADMAP:
 Repository: {record.repo_name}
 Tech Stack: {', '.join(record.tech_stack)}
 Important Files: {', '.join(important_paths[:5])}
-Structure: {len(record.tree)} top-level entries"""
+Structure: {len(record.tree)} top-level entries
+
+Key File Contents:{file_context}"""
     
     try:
         client = _get_watsonx_client()
