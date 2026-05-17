@@ -1,6 +1,7 @@
 VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
+PYTHON_BIN ?= python3.12
 REQ := requirements.txt
 HOST := 127.0.0.1
 PORT := 8000
@@ -18,10 +19,10 @@ help:
 	@echo "  make clean     Remove the venv"
 
 venv:
-	test -d $(VENV) || python3 -m venv $(VENV)
+	test -d $(VENV) || $(PYTHON_BIN) -m venv $(VENV)
 
 install: venv
-	$(PY) -m pip install --upgrade pip setuptools wheel
+	$(PY) -m pip install --upgrade "pip<26" setuptools wheel
 	$(PIP) install -r $(REQ)
 
 run: venv
