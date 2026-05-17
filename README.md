@@ -1,6 +1,7 @@
 # IBM Bob Repository Interpreter
 
 An AI-powered repository analyzer built for the IBM Bob Hackathon that helps developers understand codebases quickly by analyzing repository structure, detecting tech stacks, and providing intelligent Q&A capabilities.
+<img width="1894" height="951" alt="Screenshot 2026-05-17 at 8 49 34 PM" src="https://github.com/user-attachments/assets/3a32da65-4c9d-4257-9f1f-8c21fefbc68c" />
 
 ## Features
 
