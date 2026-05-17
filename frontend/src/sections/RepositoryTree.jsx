@@ -56,21 +56,21 @@ function renderTree(
         return (
           <li key={nodePath}>
             <div
-              className={`group relative flex items-center gap-2 py-2 pl-4 transition-colors duration-200 before:absolute before:left-0 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:bg-slate-300/20 ${isDirectory && hasChildren ? "cursor-pointer rounded-lg px-3 hover:bg-slate-300/5" : ""} ${isDirectory ? "text-amber-200" : "text-slate-200/80"}`}
-              onClick={
-                isDirectory && hasChildren
-                  ? () => toggleFolder(nodePath)
-                  : undefined
-              }
+              className={`group relative flex items-center gap-2 py-2 pl-4 transition-colors duration-200 before:absolute before:left-0 before:top-1/2 before:h-px before:w-2 before:-translate-y-1/2 before:bg-slate-300/20 ${isDirectory ? "text-amber-200" : "text-slate-200/80"}`}
             >
               {isDirectory && hasChildren && (
-                <span className="inline-flex shrink-0 items-center justify-center text-slate-300/60 transition group-hover:text-slate-100">
+                <button
+                  type="button"
+                  aria-expanded={!isCollapsed}
+                  className="inline-flex shrink-0 items-center justify-center rounded bg-transparent p-1 text-slate-300/60 transition hover:bg-slate-300/5 hover:text-slate-100"
+                  onClick={() => toggleFolder(nodePath)}
+                >
                   {isCollapsed ? (
                     <ChevronRight size={14} />
                   ) : (
                     <ChevronDown size={14} />
                   )}
-                </span>
+                </button>
               )}
               <span>{node.name}</span>
             </div>

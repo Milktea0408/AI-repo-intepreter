@@ -1,7 +1,7 @@
 VENV := .venv
 PY := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
-PYTHON_BIN ?= python3.12
+PYTHON_BIN ?= python3
 REQ := requirements.txt
 HOST := 127.0.0.1
 PORT := 8000

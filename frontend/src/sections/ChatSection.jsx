@@ -9,7 +9,7 @@ export default function ChatSection({
   isAsking,
 }) {
   return (
-    <section className="flex h-[700px] flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start">
+    <section className="flex h-[min(700px,calc(100vh-160px))] min-h-[520px] flex-col rounded-3xl border border-white/10 bg-slate-950/90 p-5 shadow-lg backdrop-blur-md contain-paint self-start max-md:h-[620px] max-md:min-h-0">
       <div className="mb-4 flex items-start justify-between gap-3 shrink-0">
         <div>
           <p className="mb-2 text-[0.72rem] uppercase tracking-[0.14em] text-violet-400">
@@ -64,7 +64,7 @@ export default function ChatSection({
             // Submit on Enter, new line on Shift+Enter
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              handleQuestionSubmit(event);
+              event.currentTarget.form?.requestSubmit();
             }
           }}
         />
