@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import HeroSection from "./sections/HeroSection";
 import UploadSection from "./sections/UploadSection";
 import DashboardHeader from "./sections/DashboardHeader";
@@ -10,6 +10,39 @@ const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 const apiBaseUrl =
   configuredApiBaseUrl?.replace(/\/+$/, "") ||
   (!import.meta.env.PROD ? "http://127.0.0.1:8000" : "");
+const STORAGE_KEY = "repo-analyzer-session-v1";
+const initialMessages = [
+  {
+    role: "assistant",
+    content: "Upload a repository zip and ask me how the codebase works.",
+  },
+];
+
+function readStoredSession() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawSession = window.localStorage.getItem(STORAGE_KEY);
+    return rawSession ? JSON.parse(rawSession) : null;
+  } catch (storageError) {
+    console.warn("Could not restore saved repository session.", storageError);
+    return null;
+  }
+}
+
+function writeStoredSession(session) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch (storageError) {
+    console.warn("Could not save repository session.", storageError);
+  }
+}
 
 function getAllFolderPaths(nodes, parentPath = "") {
   const paths = [];
@@ -101,32 +134,60 @@ async function postJson(path, payload, fallbackMessage) {
 }
 
 function App() {
+  const [storedSession] = useState(readStoredSession);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [repoData, setRepoData] = useState(null);
-  const [summary, setSummary] = useState(null);
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: "Upload a repository zip and ask me how the codebase works.",
-    },
-  ]);
+  const [uploadedFileName, setUploadedFileName] = useState(
+    () => storedSession?.uploadedFileName || "",
+  );
+  const [repoData, setRepoData] = useState(
+    () => storedSession?.repoData || null,
+  );
+  const [summary, setSummary] = useState(() => storedSession?.summary || null);
+  const [messages, setMessages] = useState(
+    () => storedSession?.messages || initialMessages,
+  );
   const [question, setQuestion] = useState(
-    "What is the purpose of this repository?",
+    () =>
+      storedSession?.question ?? "What is the purpose of this repository?",
   );
   const [isUploading, setIsUploading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState("");
-  const [collapsedFolders, setCollapsedFolders] = useState(new Set());
+  const [collapsedFolders, setCollapsedFolders] = useState(
+    () => new Set(storedSession?.collapsedFolders || []),
+  );
   const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] =
-    useState(false);
+    useState(() => storedSession?.isImportantFilesCollapsed ?? false);
   const [isOnboardingSummaryCollapsed, setIsOnboardingSummaryCollapsed] =
-    useState(false);
+    useState(() => storedSession?.isOnboardingSummaryCollapsed ?? false);
 
   const techStack = repoData?.tech_stack || [];
   const importantFiles =
     summary?.important_files || repoData?.important_files || [];
   const tree = repoData?.tree || [];
+
+  useEffect(() => {
+    writeStoredSession({
+      uploadedFileName,
+      repoData,
+      summary,
+      messages,
+      question,
+      collapsedFolders: Array.from(collapsedFolders),
+      isImportantFilesCollapsed,
+      isOnboardingSummaryCollapsed,
+    });
+  }, [
+    uploadedFileName,
+    repoData,
+    summary,
+    messages,
+    question,
+    collapsedFolders,
+    isImportantFilesCollapsed,
+    isOnboardingSummaryCollapsed,
+  ]);
 
   const toggleFolder = useCallback((folderPath) => {
     setCollapsedFolders((prev) => {
@@ -162,6 +223,7 @@ function App() {
       const uploadData = await readApiResponse(uploadResponse, "Upload failed.");
 
       setRepoData(uploadData);
+      setUploadedFileName(selectedFile.name);
       setSummary(null);
       setCollapsedFolders(new Set(getAllFolderPaths(uploadData.tree || [])));
       setIsImportantFilesCollapsed(true);
@@ -245,6 +307,7 @@ function App() {
         <UploadSection
           selectedFile={selectedFile}
           setSelectedFile={setSelectedFile}
+          uploadedFileName={uploadedFileName}
           handleUpload={handleUpload}
           isUploading={isUploading}
           isSummarizing={isSummarizing}
