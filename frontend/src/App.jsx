@@ -10,7 +10,7 @@ const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 const apiBaseUrl =
   configuredApiBaseUrl?.replace(/\/+$/, "") ||
   (!import.meta.env.PROD ? "http://127.0.0.1:8000" : "");
-const STORAGE_KEY = "repo-analyzer-session-v1";
+const STORAGE_KEY = "repo-analyzer-session-v2";
 const initialMessages = [
   {
     role: "assistant",

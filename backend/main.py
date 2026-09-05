@@ -159,9 +159,13 @@ def _generate_with_gemini(
             system_instruction=system_instruction,
             max_output_tokens=max_output_tokens,
             temperature=0.2,
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         ),
     )
     generated_text = response.text.strip() if response.text else ""
+    finish_reason = getattr(response.candidates[0], "finish_reason", None) if response.candidates else None
+    if finish_reason and str(finish_reason).upper().endswith("MAX_TOKENS"):
+        logger.warning("Gemini response reached the output token limit")
     if not generated_text:
         raise RuntimeError("Gemini returned an empty response")
     return generated_text
@@ -461,19 +465,30 @@ def _collect_text_documents(files: list[Path], root_dir: Path) -> list[dict[str,
 
 
 def _extract_summary_section(text: str, start_marker: str, end_markers: list[str]) -> str:
-    lower_text = text.lower()
-    start_index = lower_text.find(start_marker.lower())
-    if start_index == -1:
+    marker_pattern = re.escape(start_marker).replace(r"\ ", r"\s*")
+    start_match = re.search(
+        rf"^[\s#*_`-]*{marker_pattern}",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not start_match:
+        start_match = re.search(marker_pattern, text, flags=re.IGNORECASE)
+    if not start_match:
         return ""
 
-    start_index += len(start_marker)
+    start_index = start_match.end()
     end_index = len(text)
     for marker in end_markers:
-        marker_index = lower_text.find(marker.lower(), start_index)
-        if marker_index != -1 and marker_index < end_index:
-            end_index = marker_index
+        marker_pattern = re.escape(marker).replace(r"\ ", r"\s*")
+        marker_match = re.search(
+            rf"^[\s#*_`-]*{marker_pattern}",
+            text[start_index:],
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if marker_match:
+            end_index = min(end_index, start_index + marker_match.start())
 
-    return text[start_index:end_index].strip("\n :-")
+    return re.sub(r"[*_`#]", "", text[start_index:end_index]).strip("\n :-")
 
 
 def _path_segments(path: str) -> list[str]:
@@ -557,6 +572,8 @@ LEARNING_ROADMAP:
 - Step 2
 - Step 3
 
+Use the labels exactly as written, do not add Markdown fences, and keep the response under 350 words.
+
 Repository: {record.repo_name}
 Tech Stack: {', '.join(record.tech_stack)}
 Important Files: {', '.join(important_paths[:5])}
@@ -569,7 +586,7 @@ Key File Contents:{file_context}"""
     llm_error = None
     try:
         messages = [{"role": "user", "content": prompt}]
-        generated_text = _generate_with_gemini(messages, max_output_tokens=500)
+        generated_text = _generate_with_gemini(messages, max_output_tokens=900)
             
     except Exception as exc:
         logger.warning("Summary Gemini fallback category=%s", _classify_gemini_error(exc.__cause__ or exc))
