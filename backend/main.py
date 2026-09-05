@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -18,8 +17,8 @@ from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import logging
-from ibm_watsonx_ai import Credentials, APIClient
-from ibm_watsonx_ai.foundation_models import ModelInference
+from google import genai
+from google.genai import types
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
@@ -28,88 +27,54 @@ load_dotenv(BASE_DIR / ".env")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-WATSONX_API_KEY = os.getenv("WATSONX_API_KEY")
-WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
-WATSONX_URL = os.getenv("WATSONX_URL")
-WATSONX_PLATFORM_URL = os.getenv("WATSONX_PLATFORM_URL")
-WATSONX_MODEL_ID = os.getenv("WATSONX_MODEL_ID", "ibm/granite-8b-code-instruct")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_EXTRACTED_BYTES = 150 * 1024 * 1024
 MAX_ARCHIVE_FILES = 4000
 MAX_DOCUMENTS = 30
 MAX_DOCUMENT_CHARS = 4000
-WATSONX_PARAMS = {
-    "max_new_tokens": 500,
-    "temperature": 0.2,
-}
 DEBUG_LLM_ERRORS = os.getenv("DEBUG_LLM_ERRORS", "").lower() in {"1", "true", "yes"}
 
 
-def _derive_watsonx_platform_url(watsonx_url: str | None) -> str | None:
-    if WATSONX_PLATFORM_URL:
-        return WATSONX_PLATFORM_URL
-    if not watsonx_url:
-        return None
-
-    host = urlparse(watsonx_url).netloc
-    if host == "au-syd.ml.cloud.ibm.com":
-        return "https://api.au-syd.dai.cloud.ibm.com"
-    return None
-
-
-def _get_watsonx_client():
-    missing = _missing_watsonx_env()
+def _get_gemini_client():
+    missing = _missing_gemini_env()
     if missing:
-        raise RuntimeError(f"Missing Watsonx environment variables: {', '.join(missing)}")
-
-    credentials = Credentials(
-        url=WATSONX_URL,
-        api_key=WATSONX_API_KEY,
-        platform_url=_derive_watsonx_platform_url(WATSONX_URL),
-    )
-    api_client = APIClient(credentials, project_id=WATSONX_PROJECT_ID)
-
-    return ModelInference(
-        api_client=api_client,
-        model_id=WATSONX_MODEL_ID,
-    )
+        raise RuntimeError(f"Missing Gemini environment variables: {', '.join(missing)}")
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 
-def _missing_watsonx_env() -> list[str]:
-    required = {
-        "WATSONX_API_KEY": WATSONX_API_KEY,
-        "WATSONX_PROJECT_ID": WATSONX_PROJECT_ID,
-        "WATSONX_URL": WATSONX_URL,
-    }
+def _missing_gemini_env() -> list[str]:
+    required = {"GEMINI_API_KEY": GEMINI_API_KEY}
     return [name for name, value in required.items() if not value]
 
 
-def _watsonx_env_status() -> dict[str, Any]:
-    missing = _missing_watsonx_env()
+def _gemini_env_status() -> dict[str, Any]:
+    missing = _missing_gemini_env()
     return {
         "configured": not missing,
         "missing": missing,
-        "model_id": WATSONX_MODEL_ID,
+        "model": GEMINI_MODEL,
     }
 
 
-def _classify_watsonx_error(error: Exception) -> str:
+def _classify_gemini_error(error: Exception) -> str:
     message = str(error).lower()
     if isinstance(error, TimeoutError) or "timeout" in message or "timed out" in message:
         return "timeout_or_network"
-    if "missing watsonx environment variables" in message:
+    if "missing gemini environment variables" in message:
         return "missing_env"
     if "401" in message or "403" in message or "unauthorized" in message or "forbidden" in message:
         return "auth_or_permission"
-    if "404" in message or "model" in message or "project" in message or "region" in message:
-        return "model_project_or_region"
-    return "watsonx_request_failed"
+    if "404" in message or "model" in message:
+        return "model_not_found"
+    return "gemini_request_failed"
 
 
 def _safe_error_detail(error: Exception) -> dict[str, str]:
     detail = {
         "type": type(error).__name__,
-        "category": _classify_watsonx_error(error),
+        "category": _classify_gemini_error(error),
     }
     if DEBUG_LLM_ERRORS:
         safe_message = re.sub(
@@ -140,7 +105,7 @@ def _extract_model_text(response: Any) -> str:
         return response.strip()
 
     if not isinstance(response, dict):
-        logger.warning("Unexpected response type from Watsonx: %s — value: %r", type(response), response)
+        logger.warning("Unexpected response type from Gemini: %s — value: %r", type(response), response)
         return ""
 
     choices = response.get("choices")
@@ -170,48 +135,36 @@ def _extract_model_text(response: Any) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
 
-    logger.warning("Could not extract text from Watsonx response shape: %s", list(response.keys()))
+    logger.warning("Could not extract text from Gemini response shape: %s", list(response.keys()))
     return ""
 
 
-def _generate_with_watsonx(
+def _generate_with_gemini(
     messages: list[dict[str, str]],
     *,
-    max_new_tokens: int = 400,
+    max_output_tokens: int = 400,
     client: Any | None = None,
 ) -> str:
-    client = client or _get_watsonx_client()
-    chat_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
-    text_params = {"max_new_tokens": max_new_tokens, "temperature": 0.2}
-
-    chat_error = None
-    try:
-        response = client.chat(messages=messages, params=chat_params)
-        generated_text = _extract_model_text(response)
-        if generated_text:
-            return generated_text
-        logger.warning("Watsonx chat returned no extractable text; trying generate_text")
-    except Exception as e:
-        chat_error = e
-        logger.warning("Watsonx chat() failed with category=%s", _classify_watsonx_error(e))
-
-    try:
-        response = client.generate_text(
-            prompt=_messages_to_prompt(messages),
-            params=text_params,
-            raw_response=True,
-        )
-        result = _extract_model_text(response)
-        if result:
-            return result
-        logger.warning("generate_text also returned no extractable text")
-    except Exception as e:
-        logger.warning("Watsonx generate_text() failed with category=%s", _classify_watsonx_error(e))
-        if chat_error:
-            raise RuntimeError(f"Both chat and generate_text failed. chat error: {chat_error}") from e
-        raise
-
-    raise RuntimeError("Watsonx returned an empty response")
+    client = client or _get_gemini_client()
+    system_instruction = next(
+        (message["content"] for message in messages if message.get("role") == "system"),
+        None,
+    )
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=_messages_to_prompt(
+            [message for message in messages if message.get("role") != "system"]
+        ),
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            max_output_tokens=max_output_tokens,
+            temperature=0.2,
+        ),
+    )
+    generated_text = response.text.strip() if response.text else ""
+    if not generated_text:
+        raise RuntimeError("Gemini returned an empty response")
+    return generated_text
 
 app = FastAPI(title="IBM Hackathon Repo Analyzer")
 
@@ -616,14 +569,14 @@ Key File Contents:{file_context}"""
     llm_error = None
     try:
         messages = [{"role": "user", "content": prompt}]
-        generated_text = _generate_with_watsonx(messages, max_new_tokens=500)
+        generated_text = _generate_with_gemini(messages, max_output_tokens=500)
             
     except Exception as exc:
-        logger.warning("Summary Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
+        logger.warning("Summary Gemini fallback category=%s", _classify_gemini_error(exc.__cause__ or exc))
         llm_available = False
         llm_error = _safe_error_detail(exc.__cause__ or exc)
         generated_text = f"""PROJECT_OVERVIEW:
-Unable to reach Watsonx right now, so this summary uses local repository metadata for {record.repo_name}.
+Unable to reach Gemini right now, so this summary uses local repository metadata for {record.repo_name}.
 
 ARCHITECTURE_EXPLANATION:
 The repository appears to use {', '.join(record.tech_stack)}. Review the important files list and repository tree for the main entry points.
@@ -635,7 +588,7 @@ LEARNING_ROADMAP:
     
     return {
         "repo_id": record.repo_id,
-        "generated_by": "IBM Bob (Watsonx)" if llm_available else "Local fallback",
+        "generated_by": "IBM Bob (Gemini)" if llm_available else "Local fallback",
         "llm_available": llm_available,
         "llm_error": llm_error,
         "project_overview": _extract_summary_section(
@@ -721,21 +674,21 @@ def _answer_question(record: RepoRecord, question: str) -> dict[str, Any]:
     llm_available = True
     llm_error = None
     try:
-        answer = _generate_with_watsonx([system_msg, user_msg], max_new_tokens=450)
+        answer = _generate_with_gemini([system_msg, user_msg], max_output_tokens=450)
         if not answer:
             raise ValueError("Empty response from model")
     except Exception as exc:
-        logger.warning("Ask Watsonx fallback category=%s", _classify_watsonx_error(exc.__cause__ or exc))
+        logger.warning("Ask Gemini fallback category=%s", _classify_gemini_error(exc.__cause__ or exc))
         llm_available = False
         llm_error = _safe_error_detail(exc.__cause__ or exc)
         answer = (
-            "I couldn't get a Watsonx response right now. Open the matching files to inspect their contents. "
+            "I couldn't get a Gemini response right now. Open the matching files to inspect their contents. "
             f"Matched files: {', '.join(Path(d['path']).name for d in matched_files)}"
         )
 
     return {
         "repo_id": record.repo_id,
-        "generated_by": "IBM Bob (Watsonx)" if llm_available else "Local fallback",
+        "generated_by": "IBM Bob (Gemini)" if llm_available else "Local fallback",
         "llm_available": llm_available,
         "llm_error": llm_error,
         "question": question,
@@ -752,7 +705,7 @@ def read_root() -> dict[str, str]:
 def health() -> dict[str, Any]:
     return {
         "status": "ok",
-        "watsonx": _watsonx_env_status(),
+        "gemini": _gemini_env_status(),
     }
 
 
@@ -825,7 +778,7 @@ def generate_summary(payload: SummaryRequest) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail="Summary generation failed. Check backend Watsonx configuration and try again.",
+            detail="Summary generation failed. Check backend Gemini configuration and try again.",
         ) from exc
 
 
@@ -841,7 +794,7 @@ def ask_repo_question(payload: AskRequest) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail="Question answering failed. Check backend Watsonx configuration and try again.",
+            detail="Question answering failed. Check backend Gemini configuration and try again.",
         ) from exc
 
 

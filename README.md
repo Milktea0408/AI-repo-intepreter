@@ -26,7 +26,7 @@ An AI-powered repository analyzer built for the IBM Bob Hackathon that helps dev
 - Python 3.10+
 - FastAPI
 - Uvicorn
-- IBM Watsonx AI (Granite 8B Code Instruct model)
+- Google Gemini via Google AI Studio
 
 ## Setup
 
@@ -34,7 +34,7 @@ An AI-powered repository analyzer built for the IBM Bob Hackathon that helps dev
 
 - Node.js (LTS recommended)
 - Python 3.10 or newer
-- IBM Watsonx AI credentials
+- Google AI Studio API key
 
 ### Backend Setup
 
@@ -44,13 +44,11 @@ An AI-powered repository analyzer built for the IBM Bob Hackathon that helps dev
 cd backend
 ```
 
-2. Create a `.env` file with your IBM Watsonx credentials:
+2. Create a `.env` file with your Google AI Studio credentials:
 
 ```env
-WATSONX_API_KEY=your_api_key_here
-WATSONX_PROJECT_ID=your_project_id_here
-WATSONX_URL=https://us-south.ml.cloud.ibm.com
-WATSONX_MODEL_ID=ibm/granite-8b-code-instruct
+GEMINI_API_KEY=your_google_ai_studio_key_here
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 3. Install dependencies and run:
@@ -118,10 +116,8 @@ npm run preview # Preview production build
 Set these on your backend host:
 
 ```env
-WATSONX_API_KEY=your_api_key_here
-WATSONX_PROJECT_ID=your_project_id_here
-WATSONX_URL=https://au-syd.ml.cloud.ibm.com
-WATSONX_MODEL_ID=ibm/granite-8b-code-instruct
+GEMINI_API_KEY=your_google_ai_studio_key_here
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ### Frontend
@@ -137,7 +133,7 @@ VITE_API_BASE_URL=https://your-deployed-backend.example.com
 ```
 IBM_Hackathon/
 ├── backend/
-│   ├── .env.example      # Sample Watsonx environment variables
+│   ├── .env.example      # Sample Gemini environment variables
 │   ├── api/
 │   │   └── index.py      # Vercel serverless entry point
 │   ├── index.py          # Backend entry point
@@ -176,7 +172,7 @@ IBM_Hackathon/
 
 ### AI-Powered Insights
 
-- Generates onboarding summaries using IBM Watsonx AI
+- Generates onboarding summaries using Google Gemini
 - Creates file-specific descriptions
 - Provides intelligent answers to codebase questions
 - Uses context-aware document matching for accurate responses
@@ -194,7 +190,7 @@ IBM_Hackathon/
 - `POST /summary` - Generate onboarding summary
 - `POST /ask` - Ask questions about the repository
 - `GET /repo-tree` - Get repository structure
-- `GET /health` - Check backend and Watsonx environment status without exposing secrets
+- `GET /health` - Check backend and Gemini environment status without exposing secrets
 
 ## License
 
@@ -202,4 +198,4 @@ See [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-Built for the IBM Bob Hackathon using IBM Watsonx AI.
+Built for the IBM Bob Hackathon using IBM Watsonx AI (The AI model has been modified later to Google Gemini via Google AI Studio).

@@ -65,31 +65,23 @@ function getApiBaseUrl() {
   return apiBaseUrl;
 }
 
-function debugApi(label, details) {
-  if (import.meta.env.DEV) {
-    console.info(`[api] ${label}`, details);
-  }
-}
-
 function describeLlmError(llmError) {
   if (!llmError?.category) {
-    return "Watsonx did not respond, so Bob returned a local fallback.";
+    return "Gemini did not respond, so Bob returned a local fallback.";
   }
 
   const messages = {
-    missing_env:
-      "Watsonx is missing required environment variables on the backend.",
+    missing_env: "Gemini is missing the required API key on the backend.",
     auth_or_permission:
-      "Watsonx rejected the request. Check the API key, project ID, and project access.",
-    model_project_or_region:
-      "Watsonx could not use the configured model/project/region. Check WATSONX_MODEL_ID, WATSONX_PROJECT_ID, and WATSONX_URL.",
+      "Gemini rejected the request. Check the API key and its Google AI Studio permissions.",
+    model_not_found:
+      "Gemini could not use the configured model. Check GEMINI_MODEL.",
     timeout_or_network:
-      "Watsonx timed out or could not be reached from the backend.",
-    watsonx_request_failed:
-      "Watsonx request failed on the backend.",
+      "Gemini timed out or could not be reached from the backend.",
+    gemini_request_failed: "Gemini request failed on the backend.",
   };
 
-  return `${messages[llmError.category] || messages.watsonx_request_failed} Bob returned a local fallback.`;
+  return `${messages[llmError.category] || messages.gemini_request_failed} Bob returned a local fallback.`;
 }
 
 async function readApiResponse(response, fallbackMessage) {
@@ -147,8 +139,7 @@ function App() {
     () => storedSession?.messages || initialMessages,
   );
   const [question, setQuestion] = useState(
-    () =>
-      storedSession?.question ?? "What is the purpose of this repository?",
+    () => storedSession?.question ?? "What is the purpose of this repository?",
   );
   const [isUploading, setIsUploading] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -157,8 +148,9 @@ function App() {
   const [collapsedFolders, setCollapsedFolders] = useState(
     () => new Set(storedSession?.collapsedFolders || []),
   );
-  const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] =
-    useState(() => storedSession?.isImportantFilesCollapsed ?? false);
+  const [isImportantFilesCollapsed, setIsImportantFilesCollapsed] = useState(
+    () => storedSession?.isImportantFilesCollapsed ?? false,
+  );
   const [isOnboardingSummaryCollapsed, setIsOnboardingSummaryCollapsed] =
     useState(() => storedSession?.isOnboardingSummaryCollapsed ?? false);
 
@@ -220,7 +212,10 @@ function App() {
         body: formData,
       });
 
-      const uploadData = await readApiResponse(uploadResponse, "Upload failed.");
+      const uploadData = await readApiResponse(
+        uploadResponse,
+        "Upload failed.",
+      );
 
       setRepoData(uploadData);
       setUploadedFileName(selectedFile.name);

@@ -1,5 +1,5 @@
 uvicorn[standard]
 fastapi
 python-multipart
-ibm-watsonx-ai==1.5.11
+google-genai
 python-dotenv
